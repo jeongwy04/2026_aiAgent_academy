@@ -1,0 +1,29 @@
+$kind: http-request
+order: 1000
+method: POST
+url: '{{base_url}}/api/v1/members'
+auth:
+  type: noauth
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: "{\n  \"email\": \"{{alice_email}}\",\n  \"password\": \"postman-test-password!\"\n}"
+scripts:
+- type: beforeRequest
+  code: 'const seed = pm.variables.replaceIn(''{{$guid}}'');
+
+    pm.collectionVariables.set(''alice_email'', `alice-${seed}@example.com`);
+
+    pm.collectionVariables.set(''bob_email'', `bob-${seed}@example.com`);
+
+    pm.collectionVariables.set(''event_id'', pm.variables.replaceIn(''{{$guid}}''));
+
+    pm.collectionVariables.set(''late_event_id'', pm.variables.replaceIn(''{{$guid}}''));'
+  language: text/javascript
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 201'', () => pm.response.to.have.status(201));
+
+    pm.test(''No password disclosure'', () => pm.expect(pm.response.json()).not.to.have.property(''password_hash''));'

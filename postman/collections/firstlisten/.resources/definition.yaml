@@ -1,0 +1,13 @@
+$kind: collection
+name: FirstListen backend regression
+description: Local API regression against the real backend. Run in order; creates isolated test members.
+variables:
+- key: base_url
+  value: http://127.0.0.1:8000
+- key: token
+  value: ''
+auth:
+  type: bearer
+  credentials:
+  - key: token
+    value: '{{token}}'

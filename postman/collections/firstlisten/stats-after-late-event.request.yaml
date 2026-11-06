@@ -1,0 +1,14 @@
+$kind: http-request
+order: 9000
+method: GET
+url: '{{base_url}}/api/v1/tracks/{{track_id}}/stats'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 200'', () => pm.response.to.have.status(200));
+
+    pm.test(''Two events'', () => pm.expect(pm.response.json().event_count).to.eql(2));
+
+    pm.test(''150 seconds'', () => pm.expect(pm.response.json().total_listened_ms).to.eql(150000));
+
+    pm.test(''Earlier first record'', () => pm.expect(pm.response.json().first_recorded_at).to.match(/^2020-01-01T01:00:00/));'

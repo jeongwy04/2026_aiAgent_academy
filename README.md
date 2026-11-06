@@ -3,7 +3,117 @@
 
 Android에서 YouTube Music 청취 이력을 자동으로 기록하고, 자연어 질문을 SQL로 변환해 곡별 최초 기록일과 총 재생 시간을 조회하는 서비스입니다.
 
-> 아래 내용은 구현 계획입니다. 실행 명령과 패키지는 구현 후 확정합니다.
+FastAPI 백엔드의 인증, 청취 이벤트 동기화, 개인 곡 목록·통계, 제한된 한국어 질문 조회를 구현했습니다. Android 수집기, 외부 LLM Tool Calling, 월간 리포트는 후속 구현 범위입니다.
+
+## 백엔드 실행
+
+Docker Compose로 PostgreSQL, DB 역할, 마이그레이션, API를 함께 실행합니다.
+
+```bash
+docker compose up --build -d
+```
+
+- API 문서: http://localhost:8000/docs
+- OpenAPI 계약: [docs/openapi.json](docs/openapi.json)
+- 상태 확인: `GET /health`, DB 연결 확인: `GET /ready`
+- 종료: `docker compose down` (DB 볼륨은 보존됩니다.)
+
+기본 비밀번호는 로컬 개발용입니다. 설정을 변경하려면 `.env.example`을 `.env`로 복사한 뒤 수정해 주세요. Compose는 세 DB 비밀번호를 사용하고, Python을 직접 실행할 때는 URL 설정도 사용합니다. 비밀번호의 URL 예약 문자는 URL에서 인코딩해야 합니다. DB 초기화 스크립트는 빈 볼륨에서 한 번 실행되므로 기존 볼륨의 비밀번호는 `.env` 변경만으로 바뀌지 않습니다.
+
+Python 3.12 이상으로 직접 실행할 수도 있습니다.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[test]'
+cp .env.example .env
+docker compose up -d --build db
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+애플리케이션은 시작할 때 테이블과 실행 계정의 권한을 확인합니다. PostgreSQL이 준비되지 않았거나 실행 계정이 테이블 소유자·관리자이거나 RLS가 꺼져 있으면 시작을 거부합니다. SQLite는 단위 테스트용이며 서버 실행용으로 지원하지 않습니다.
+
+## 구현된 API
+
+| 메서드 | 경로 | 기능 |
+| --- | --- | --- |
+| POST | `/api/v1/members` | 이메일·비밀번호 회원가입 |
+| POST | `/api/v1/auth/login` | 만료 시각이 있는 Bearer 토큰 발급 |
+| POST | `/api/v1/auth/logout` | 현재 토큰 즉시 폐기 |
+| GET | `/api/v1/members/me` | 로그인 회원 조회 |
+| POST | `/api/v1/listens/sync` | 이벤트 1~100개 원자적 저장·갱신 |
+| GET | `/api/v1/tracks?q=입춘&limit=20&offset=0` | 본인 곡명·아티스트 검색 및 페이지 조회 |
+| GET | `/api/v1/tracks/{track_id}` | 본인 곡 상세 |
+| GET | `/api/v1/tracks/{track_id}/stats` | 최초 기록 시각·총 관찰 시간·이벤트 수 |
+| POST | `/api/v1/chat` | 본인 곡의 최초 기록일·총 재생 시간 질문 |
+
+회원가입·로그인은 `{"email":"you@example.com","password":"10자 이상의 비밀번호"}`를 받습니다. 이후 요청은 `Authorization: Bearer <access_token>`을 사용합니다. 비밀번호는 salt를 포함한 PBKDF2 해시로, 토큰은 SHA-256 해시로만 저장합니다. 이메일은 대소문자를 구분하지 않으며 비밀번호 앞뒤 공백은 유지합니다.
+
+### Android 동기화 계약
+
+```json
+{
+  "events": [
+    {
+      "event_id": "3c473c97-0a37-4d64-99be-18574b1cec08",
+      "track": {
+        "title": "입춘",
+        "artist": "한로로",
+        "album": null,
+        "external_id": "youtube-music-track-id"
+      },
+      "observed_at": "2026-11-06T15:00:00+09:00",
+      "listened_ms": 31000
+    }
+  ]
+}
+```
+
+- 기기에서 청취 세션마다 UUID `event_id`를 생성하고 Room에 영구 저장합니다. 재시도·시간 갱신에는 동일 UUID를, 반복 청취에는 새 UUID를 사용해야 합니다. 서버는 이벤트를 회원별로 구분합니다.
+- `observed_at`은 세션의 최초 관찰 시각이며 타임존이 필수입니다. 누적 시간을 갱신해도 최초 시각을 유지해 주세요. 서버는 같은 이벤트의 가장 이른 시각과 가장 큰 누적 시간을 유지합니다. 오프라인 지연 도착도 집계에 반영됩니다.
+- 30,000ms 미만은 `ignored_below_threshold`로 응답하며 저장·집계하지 않습니다. 이후 동일 UUID로 기준을 넘으면 저장합니다. 한 이벤트의 상한은 24시간이고 현재보다 5분 이상 미래인 관찰 시각은 거절합니다.
+- 동일 이벤트를 다른 곡에 재사용하면 `409`이며 배치 전체를 롤백합니다. 입력 오류는 `422`입니다. 타 사용자·존재하지 않는 곡 접근은 동일하게 `404`입니다.
+- 서버가 반환하는 `track_id`를 곡 상세·통계·챗봇에 사용합니다. 사용자 ID를 요청 본문으로 받지 않습니다.
+- `external_id`가 있으면 회원별 YouTube Music ID로 곡을 구분합니다. 없으면 정규화한 곡명·가수·앨범 조합을 사용합니다. 메타데이터가 같은 다른 녹음은 구분할 수 없고, ID 유무가 바뀌면 별도 곡으로 생성될 수 있습니다. 최초 저장된 메타데이터를 유지합니다.
+- 전송 실패나 `503`은 같은 이벤트로 재시도해도 중복 합산되지 않습니다. 배치 처리는 전부 성공하거나 전부 취소됩니다.
+
+### 질문 조회의 현재 범위
+
+```json
+{"question":"이 노래 총 재생 시간이 얼마야?","track_id":"서버에서 받은 UUID"}
+```
+
+`{"question":"입춘 언제부터 들었어?"}`처럼 곡명만 보내도 됩니다. 제목이 일치하는 곡을 우선 찾고, 없으면 제목 부분 검색을 사용합니다. 여러 후보이면 `ambiguous`와 최대 20개 `candidates`를 반환하며 `track_id`를 선택하기 전에는 집계하지 않습니다. `이 노래`에 곡 ID가 없으면 `needs_track`, 기록이 없으면 `not_found`, 지원하지 않는 질문은 `unsupported`를 반환합니다. 선택한 타 사용자 곡 ID는 `404`입니다.
+
+현재 질문 분류·SQL 제안은 규칙 기반이며 외부 LLM 호출은 없습니다. 지원하는 한국어 표현에는 “언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간”이 포함됩니다. 자유로운 모든 표현을 이해하는 챗봇은 아닙니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
+
+SQLGlot AST를 서버의 허용된 집계·인증 필터와 대조하고 검증된 서버 SQL만 실행합니다. 이 검증기는 향후 LLM Tool Calling에도 재사용할 수 있습니다. 현재는 쿼리의 의미가 비슷해도 허용된 AST 형태가 아니면 거절하는 보수적인 정책입니다. 읽기 전용 계정·트랜잭션, 강제 RLS, 트랜잭션 로컬 사용자 컨텍스트, 2초 쿼리 제한을 함께 적용합니다. [SQLAlchemy의 원자적 upsert](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html#insert-on-conflict-upsert)와 [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)를 사용합니다.
+
+인증 요청은 IP당 분당 10회, 질문은 사용자당 분당 20회로 제한합니다. `429`의 `Retry-After` 이후 다시 요청해 주세요. 현재 제한기는 프로세스 메모리를 사용하므로 다중 워커·다중 인스턴스 운영 전에는 공유 저장소 기반 제한기로 교체해야 합니다. 운영 배포 시 HTTPS와 신뢰할 프록시 설정이 필요합니다.
+
+## 백엔드 검증
+
+```bash
+# SQLite 기반 빠른 테스트: PostgreSQL 전용 테스트는 건너뜁니다.
+pytest -q
+
+# 마이그레이션을 적용한 개발용 PostgreSQL에서 동일 API와 RLS 검증
+TEST_DATABASE_URL=postgresql+psycopg://firstlisten_app:local-app-password@localhost:5432/firstlisten \
+TEST_READ_DATABASE_URL=postgresql+psycopg://firstlisten_reader:local-reader-password@localhost:5432/firstlisten \
+pytest -q
+
+# 실행 중인 API에 인증·재전송·지연 도착·집계·사용자 격리·로그아웃 검증
+postman collection lint postman/collections/firstlisten
+postman collection run postman/collections/firstlisten --no-report-events
+
+# FastAPI 변경 후 저장된 OpenAPI 계약 갱신
+python scripts/export_openapi.py
+```
+
+PostgreSQL 테스트와 Postman은 임의 이메일의 테스트 회원·기록을 생성하므로 개발 전용 DB에서 실행해 주세요. Postman은 기본 `http://127.0.0.1:8000`을 사용하며 다른 주소는 `--env-var base_url=http://...`으로 지정할 수 있습니다. CLI 없이 Postman 앱을 사용하려면 [OpenAPI 계약](docs/openapi.json)을 가져올 수 있습니다.
+
+코드는 `app/`, 마이그레이션은 `migrations/`, 회귀 테스트는 `tests/`, 실행 가능한 Postman v3 컬렉션은 `postman/collections/firstlisten/`에 있습니다.
 
 ## 기능
 

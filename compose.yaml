@@ -1,0 +1,45 @@
+services:
+  db:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: firstlisten
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-owner-password}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-local-app-password}
+      READ_DB_PASSWORD: ${READ_DB_PASSWORD:-local-reader-password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d firstlisten"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-local-owner-password}@db:5432/firstlisten
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://firstlisten_app:${APP_DB_PASSWORD:-local-app-password}@db:5432/firstlisten
+      READ_DATABASE_URL: postgresql+psycopg://firstlisten_reader:${READ_DB_PASSWORD:-local-reader-password}@db:5432/firstlisten
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 10
+volumes:
+  postgres_data:

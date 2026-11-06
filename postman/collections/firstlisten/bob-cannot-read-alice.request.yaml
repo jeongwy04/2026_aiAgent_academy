@@ -1,0 +1,15 @@
+$kind: http-request
+order: 14000
+method: GET
+url: '{{base_url}}/api/v1/tracks/{{track_id}}/stats'
+auth:
+  type: bearer
+  credentials:
+  - key: token
+    value: '{{bob_token}}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 404'', () => pm.response.to.have.status(404));
+
+    '

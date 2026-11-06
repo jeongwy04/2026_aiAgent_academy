@@ -1,0 +1,18 @@
+$kind: http-request
+order: 5000
+method: POST
+url: '{{base_url}}/api/v1/listens/sync'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: "{\n  \"events\": [\n    {\n      \"event_id\": \"{{event_id}}\",\n      \"track\": {\n        \"title\"\
+    : \"입춘\",\n        \"artist\": \"한로로\",\n        \"external_id\": \"postman-ipchun\"\n      },\n      \"observed_at\"\
+    : \"2020-01-02T01:00:00Z\",\n      \"listened_ms\": 120000\n    }\n  ]\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 200'', () => pm.response.to.have.status(200));
+
+    '

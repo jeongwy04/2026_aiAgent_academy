@@ -1,0 +1,18 @@
+$kind: http-request
+order: 12000
+method: POST
+url: '{{base_url}}/api/v1/members'
+auth:
+  type: noauth
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: "{\n  \"email\": \"{{bob_email}}\",\n  \"password\": \"postman-test-password!\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 201'', () => pm.response.to.have.status(201));
+
+    '

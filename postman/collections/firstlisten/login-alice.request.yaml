@@ -1,0 +1,20 @@
+$kind: http-request
+order: 2000
+method: POST
+url: '{{base_url}}/api/v1/auth/login'
+auth:
+  type: noauth
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: "{\n  \"email\": \"{{alice_email}}\",\n  \"password\": \"postman-test-password!\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 200'', () => pm.response.to.have.status(200));
+
+    pm.collectionVariables.set(''token'', pm.response.json().access_token);
+
+    pm.test(''Bearer token'', () => pm.expect(pm.response.json().token_type).to.eql(''bearer''));'

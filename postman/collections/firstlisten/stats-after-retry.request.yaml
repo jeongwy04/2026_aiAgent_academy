@@ -1,0 +1,12 @@
+$kind: http-request
+order: 7000
+method: GET
+url: '{{base_url}}/api/v1/tracks/{{track_id}}/stats'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: 'pm.test(''HTTP 200'', () => pm.response.to.have.status(200));
+
+    pm.test(''One event'', () => pm.expect(pm.response.json().event_count).to.eql(1));
+
+    pm.test(''120 seconds'', () => pm.expect(pm.response.json().total_listened_ms).to.eql(120000));'
