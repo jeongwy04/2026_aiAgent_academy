@@ -84,6 +84,8 @@ uvicorn app.main:app --reload
 
 ### 질문 조회의 현재 범위
 
+응답 JSON은 요청 질문 `question`과 답변 `answer`를 맨 앞에 표시합니다. `status`, 곡 정보, 집계값 등 기존 상세 필드도 그대로 반환합니다.
+
 ```json
 {"question":"이 노래 총 재생 시간이 얼마야?","track_id":"서버에서 받은 UUID"}
 ```

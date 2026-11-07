@@ -464,6 +464,14 @@
       },
       "ChatOut": {
         "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -474,10 +482,6 @@
               "unsupported"
             ],
             "title": "Status"
-          },
-          "answer": {
-            "type": "string",
-            "title": "Answer"
           },
           "metric": {
             "anyOf": [
@@ -559,8 +563,9 @@
         },
         "type": "object",
         "required": [
-          "status",
-          "answer"
+          "question",
+          "answer",
+          "status"
         ],
         "title": "ChatOut"
       },

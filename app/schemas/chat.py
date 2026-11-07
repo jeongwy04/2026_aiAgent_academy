@@ -14,8 +14,9 @@ class ChatInput(Input):
 
 
 class ChatOut(BaseModel):
-    status: Literal["answered", "needs_track", "ambiguous", "not_found", "unsupported"]
+    question: str
     answer: str
+    status: Literal["answered", "needs_track", "ambiguous", "not_found", "unsupported"]
     metric: Literal["first", "total", "both", "stats"] | None = None
     track: TrackOut | None = None
     candidates: list[TrackOut] = Field(default_factory=list)
