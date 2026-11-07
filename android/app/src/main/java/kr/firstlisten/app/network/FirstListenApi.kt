@@ -4,6 +4,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kr.firstlisten.core.HttpFailure
@@ -27,6 +28,34 @@ import kotlin.coroutines.resumeWithException
 @Serializable private data class Credentials(val email: String, val password: String)
 @Serializable data class TokenResponse(val access_token: String, val expires_at: String)
 @Serializable data class MemberResponse(val id: String, val email: String)
+@Serializable data class TrackOut(
+    val id: String,
+    val title: String,
+    val artist: String? = null,
+    val album: String? = null,
+    val external_id: String? = null,
+)
+@Serializable data class TrackPage(val items: List<TrackOut>, val total: Int, val limit: Int, val offset: Int)
+@Serializable data class TrackStats(
+    val track: TrackOut,
+    val first_recorded_at: String? = null,
+    val total_listened_ms: Long? = null,
+    val event_count: Int,
+    val measured_event_count: Int = 0,
+    val unknown_duration_event_count: Int = 0,
+)
+@Serializable private data class ChatBody(val question: String, val track_id: String? = null)
+@Serializable data class ChatReply(
+    val question: String,
+    val answer: String,
+    val status: String,
+    val metric: String? = null,
+    val track: TrackOut? = null,
+    val candidates: List<TrackOut> = emptyList(),
+    val first_recorded_at: String? = null,
+    val total_listened_ms: Long? = null,
+    val rows: List<JsonObject> = emptyList(),
+)
 @Serializable private data class TrackDto(val title: String, val artist: String, val album: String?, val external_id: String?)
 @Serializable private data class EventDto(val event_id: String, val track: TrackDto, val observed_at: String, val listened_ms: Long)
 @Serializable private data class SyncBody(val events: List<EventDto>)
@@ -60,6 +89,20 @@ class FirstListenApi(
     suspend fun me(baseUrl: String, token: String): MemberResponse = decode(request(baseUrl, "/api/v1/members/me", token))
     suspend fun logout(account: SyncAccount) { request(account.baseUrl, "/api/v1/auth/logout", account.token, "") }
 
+    suspend fun tracks(account: SyncAccount, q: String?, limit: Int = 20, offset: Int = 0): TrackPage =
+        decode(request(account.baseUrl, "/api/v1/tracks", account.token, query = buildMap {
+            q?.trim()?.takeIf { it.isNotEmpty() }?.let { put("q", it.take(300)) }
+            put("limit", "$limit")
+            put("offset", "$offset")
+        }))
+
+    suspend fun stats(account: SyncAccount, trackId: String): TrackStats =
+        decode(request(account.baseUrl, "/api/v1/tracks/$trackId/stats", account.token))
+
+    suspend fun chat(account: SyncAccount, question: String, trackId: String?): ChatReply =
+        decode(request(account.baseUrl, "/api/v1/chat", account.token,
+            json.encodeToString(ChatBody(question.trim().take(500), trackId))))
+
     override suspend fun send(account: SyncAccount, events: List<ListenSnapshot>): List<SyncAck> {
         require(events.size in 1..100 && events.all { it.ownerKey == account.ownerKey })
         val body = SyncBody(events.map { EventDto(it.eventId,
@@ -71,15 +114,21 @@ class FirstListenApi(
     private inline fun <reified T> decode(body: String): T = try { json.decodeFromString(body) }
         catch (error: SerializationException) { throw IOException("서버 응답 형식을 확인할 수 없습니다.", error) }
 
-    private suspend fun request(baseUrl: String, path: String, token: String? = null, body: String? = null): String {
-        val builder = Request.Builder().url(normalizeBaseUrl(baseUrl) + path).header("Accept", "application/json")
+    private suspend fun request(
+        baseUrl: String, path: String, token: String? = null, body: String? = null,
+        query: Map<String, String> = emptyMap(),
+    ): String {
+        val url = (normalizeBaseUrl(baseUrl) + path).toHttpUrl().newBuilder()
+            .apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
+        val builder = Request.Builder().url(url).header("Accept", "application/json")
         token?.let { builder.header("Authorization", "Bearer $it") }
         if (body != null) builder.post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
         return client.newCall(builder.build()).await().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val detail = runCatching { json.parseToJsonElement(text).jsonObject["detail"]?.jsonPrimitive?.content }.getOrNull()
-                throw HttpFailure(response.code, detail ?: "서버 요청 실패 (${response.code})")
+                throw HttpFailure(response.code, detail ?: "서버 요청 실패 (${response.code})",
+                    response.header("Retry-After")?.toLongOrNull())
             }
             text
         }
