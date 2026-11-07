@@ -75,6 +75,11 @@ def report(results: list[dict], runs: int) -> dict:
     leaks = sum(not trial["no_leak"] for trial in trials)
     overall = sum(trial["passed"] for trial in trials) / len(trials)
     print(f"유출 {leaks}건 | 전체 pass@1 {overall:.0%}")
+    # CHAT_LLM_SUMMARY=true + CHAT_DEBUG=true일 때: 요약 문장 숫자가 입력 값과 맞은 비율(가드레일이 막은 위험)
+    summaries = [s for s in ((t["response"].get("debug") or {}).get("summary") for t in trials) if s and s["numbers_ok"] is not None]
+    summary_ok = sum(s["numbers_ok"] for s in summaries) / len(summaries) if summaries else None
+    if summaries:
+        print(f"LLM 요약 {len(summaries)}건 | 숫자 일치 {summary_ok:.0%} (불일치 {sum(not s['numbers_ok'] for s in summaries)}건은 템플릿으로 대체)")
     failures = [(result, trial) for result in results for trial in result["trials"] if not trial["passed"]]
     if failures:
         print("\n실패 목록:")
@@ -94,7 +99,7 @@ def report(results: list[dict], runs: int) -> dict:
             print(f"    생성 SQL(마지막): {sqls[-1]}")
         if response.get("http_status") == 429:
             print("    → 요청 제한: .env에 CHAT_REQUESTS_PER_MINUTE=200을 넣고 API를 다시 띄우세요.")
-    return {"categories": summary, "leaks": leaks, "overall_pass@1": overall}
+    return {"categories": summary, "leaks": leaks, "overall_pass@1": overall, "summary_numbers_ok": summary_ok}
 
 
 def main() -> None:

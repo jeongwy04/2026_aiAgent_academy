@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://llm.pcl.kr/v1"
     # true: Text-to-SQL 생성 SQL·시도 내역을 응답 debug 필드에 포함 (평가·개발 전용)
     chat_debug: bool = False
+    # true: Text-to-SQL 결과를 LLM이 요약(숫자 가드레일 통과 시만 채택, 실패 시 템플릿). 결과 행이 LLM에 전송됨
+    chat_llm_summary: bool = False
 
     @model_validator(mode="after")
     def valid_timezone(self):

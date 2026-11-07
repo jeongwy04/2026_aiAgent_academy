@@ -31,7 +31,13 @@ SQL_PROMPT = """너는 PostgreSQL 전문가다. 사용자 본인의 음악 청�
 - 날짜·월·요일 계산은 observed_at AT TIME ZONE '{tz}' 기준.
 - 오늘·이번 주·이번 달·지난달·작년 같은 기준 시점은 반드시 now() AT TIME ZONE '{tz}'로 계산하라 (CURRENT_DATE 금지).
 - 재생 시간 열 이름은 _ms로 끝나게 하라 (예: total_ms).
-- source='google_takeout_my_activity'의 listened_ms는 알 수 없어 NULL이다. 0초나 30초로 대체하지 마라. 시간 질문에는 SUM(listened_ms)와 COUNT(listened_ms), COUNT(*)-COUNT(listened_ms)를 함께 반환해 미확인 건수를 구분하라.
+- 결과 열 이름은 아래 목록에서만 골라 AS로 붙여라:
+  title(곡명), artist(가수), album, total_ms(총 재생 시간), play_count(청취 횟수),
+  track_count(곡 수), artist_count(가수 수), unknown_count(시간 미확인 건수),
+  first_at(최초 기록 시각), last_at(마지막 기록 시각),
+  month(월), week(주), day(날짜), hour(시), weekday(요일), rank(순위)
+- 목록에 없는 값이 꼭 필요할 때만 영어 snake_case로 새 이름을 써라.
+- source='google_takeout_my_activity'의 listened_ms는 알 수 없어 NULL이다. 0초나 30초로 대체하지 마라. 시간 질문에는 SUM(listened_ms)와 COUNT(listened_ms), COUNT(*)-COUNT(listened_ms) AS unknown_count를 함께 반환해 미확인 건수를 구분하라.
 - LIMIT은 {max_rows} 이하. CTE(WITH), UNION, 주석, 세미콜론, 파라미터는 쓰지 마라.
 - 설명이나 마크다운 없이 SQL만 출력하라."""
 

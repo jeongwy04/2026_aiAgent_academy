@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.ai.api_use.chat_classify import classify_question
 from app.ai.api_use.query.executor import run_metric
 from app.ai.api_use.query.response import build_answer, format_rows
+from app.ai.api_use.summary import summarize
 from app.ai.api_use.text_to_sql import run_stats
 from app.config import get_settings
 from app.models import Track, ListenEvent
@@ -36,13 +37,19 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
     if metric is None:
         return ChatOut(question=request.question, status="unsupported", answer=UNSUPPORTED)
     if metric == "stats":
+        settings = get_settings()
         result = run_stats(session, user_id, request.question)
-        debug = {"sql_attempts": result.attempts} if get_settings().chat_debug else None
+        debug = {"sql_attempts": result.attempts} if settings.chat_debug else None
         if result.rows is None:
             return ChatOut(question=request.question, status="unsupported", metric="stats", debug=debug,
                            answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
+        answer = format_rows(result.rows, request.question)
+        if settings.chat_llm_summary and result.rows:
+            answer, summary_info = summarize(request.question, result.rows, answer)
+            if debug is not None:
+                debug["summary"] = summary_info
         return ChatOut(question=request.question, status="answered" if result.rows else "not_found", metric="stats", debug=debug,
-                       answer=format_rows(result.rows), rows=result.rows)
+                       answer=answer, rows=result.rows)
     if request.track_id:
         track = owned_track(session, user_id, request.track_id)
     else:
