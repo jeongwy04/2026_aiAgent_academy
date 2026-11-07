@@ -3,7 +3,8 @@
     "_postman_id": "d241e67d-9174-4107-b823-4355f503160e",
     "name": "FirstListen API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "27065373"
+    "_exporter_id": "27065373",
+    "description": "로컬 테스트용 컬렉션입니다. Variables의 email·password를 설정한 뒤 로그인하면 access_token이 자동 저장됩니다. 업로드 파일은 Takeout 업로드의 form-data에서 직접 선택하세요. track_id와 job_id는 자신의 응답에서 받은 값을 사용하세요. 실제 비밀번호·토큰·개인 기록을 포함한 상태로 다시 Export하여 공유하지 마세요."
   },
   "item": [
     {
@@ -140,7 +141,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -176,7 +177,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",
@@ -224,7 +225,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",
@@ -274,7 +275,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -311,7 +312,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",
@@ -342,7 +343,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"access_token\": \"string\",\n  \"expires_at\": \"1969-06-02T13:37:14.781Z\",\n  \"token_type\": \"bearer\"\n}"
+              "body": "{\n  \"access_token\": \"example-token\",\n  \"expires_at\": \"1969-06-02T13:37:14.781Z\",\n  \"token_type\": \"bearer\"\n}"
             },
             {
               "name": "Validation Error",
@@ -360,7 +361,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"y68QA07g6P0KO@awQRrVYSgmF.ikp\",\n  \"password\": \"stringstring\"\n}",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",
@@ -393,6 +394,19 @@
               "cookie": [],
               "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\n        6836,\n        \"string\"\n      ],\n      \"msg\": \"string\",\n      \"type\": \"string\",\n      \"input\": \"\",\n      \"ctx\": {}\n    },\n    {\n      \"loc\": [\n        7300,\n        \"string\"\n      ],\n      \"msg\": \"string\",\n      \"type\": \"string\",\n      \"input\": \"\",\n      \"ctx\": {}\n    }\n  ]\n}"
             }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set(\"access_token\", pm.response.json().access_token);",
+                  "}"
+                ]
+              }
+            }
           ]
         },
         {
@@ -403,7 +417,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -441,7 +455,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -479,7 +493,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -508,7 +522,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -540,13 +554,24 @@
       "item": [
         {
           "name": "청취 기록 등록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {\n    const result = pm.response.json().results.find(item => item.track_id);\n    if (result) {\n        pm.collectionVariables.set(\"track_id\", result.track_id);\n    }\n}"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": {
               "type": "bearer",
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -564,7 +589,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"events\": [\n    {\n      \"event_id\": \"85f4f06c-6ce0-a4c8-b321-8237bf6ca3d7\",\n      \"track\": {\n        \"title\": \"string\",\n        \"artist\": \"string\",\n        \"album\": null,\n        \"external_id\": \"string\"\n      },\n      \"observed_at\": \"2025-11-24T09:58:35.527Z\",\n      \"listened_ms\": 50351342\n    }\n  ]\n}",
+              "raw": "{\n  \"events\": [\n    {\n      \"event_id\": \"3c473c97-0a37-4d64-99be-18574b1cec08\",\n      \"track\": {\n        \"title\": \"입춘\",\n        \"artist\": \"한로로\",\n        \"external_id\": \"postman-ipchun\"\n      },\n      \"observed_at\": \"2026-11-06T15:00:00+09:00\",\n      \"listened_ms\": 120000\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -572,10 +597,12 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/listens/sync",
+              "raw": "http://localhost:8000/api/v1/listens/sync",
+              "protocol": "http",
               "host": [
-                "{{baseUrl}}"
+                "localhost"
               ],
+              "port": "8000",
               "path": [
                 "api",
                 "v1",
@@ -601,7 +628,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "body": {
@@ -655,7 +682,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "body": {
@@ -703,7 +730,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -730,7 +757,7 @@
               "variable": [
                 {
                   "key": "track_id",
-                  "value": "006797fd-75de-434f-60aa-239fe4a824e6"
+                  "value": "{{track_id}}"
                 }
               ]
             }
@@ -748,7 +775,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -795,7 +822,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -840,7 +867,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -866,7 +893,7 @@
               "variable": [
                 {
                   "key": "track_id",
-                  "value": "006797fd-75de-434f-60aa-239fe4a824e6"
+                  "value": "{{track_id}}"
                 }
               ]
             }
@@ -884,7 +911,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -930,7 +957,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -974,7 +1001,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -1025,7 +1052,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -1078,7 +1105,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "url": {
@@ -1124,17 +1151,28 @@
       ]
     },
     {
-      "name": "질문",
+      "name": "Chat",
       "item": [
         {
           "name": "음악 질문하기",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = JSON.parse(pm.request.body.raw);\nconst question = String(body.question || \"\").trim();\nconst needsTrack = /^(?:이|그)\\s*(?:노래|곡)(?:\\s|[은는을를의]|$)/.test(question);\nif (needsTrack && !body.track_id) {\n    const trackId = pm.collectionVariables.get(\"track_id\");\n    if (trackId) body.track_id = trackId;\n}\npm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": {
               "type": "bearer",
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{bearerToken}}",
+                  "value": "{{access_token}}",
                   "type": "string"
                 }
               ]
@@ -1152,7 +1190,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"question\": \"string\",\n  \"track_id\": \"5dd3155f-e9ef-adb7-523e-f386383cbc63\"\n}",
+              "raw": "{\n  \"question\": \"이번 달 가장 많이 들은 곡은?\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1188,7 +1226,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "body": {
@@ -1223,7 +1261,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"question\": \"입춘 얼마나 들었어?\",\n  \"answer\": \"string\",\n  \"status\": \"answered\",\n  \"metric\": null,\n  \"track\": null,\n  \"candidates\": [\n    {\n      \"id\": \"cc689160-bea1-5a4e-f226-b0e55cc6bba1\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": \"string\",\n      \"external_id\": null\n    },\n    {\n      \"id\": \"1775cfc8-9ead-6eab-e110-87cab16df1fe\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": null,\n      \"external_id\": \"string\"\n    }\n  ],\n  \"first_recorded_at\": null,\n  \"total_listened_ms\": null\n}"
+              "body": "{\n  \"status\": \"answered\",\n  \"answer\": \"string\",\n  \"metric\": null,\n  \"track\": null,\n  \"candidates\": [\n    {\n      \"id\": \"cc689160-bea1-5a4e-f226-b0e55cc6bba1\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": \"string\",\n      \"external_id\": null\n    },\n    {\n      \"id\": \"1775cfc8-9ead-6eab-e110-87cab16df1fe\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": null,\n      \"external_id\": \"string\"\n    }\n  ],\n  \"first_recorded_at\": null,\n  \"total_listened_ms\": null\n}"
             },
             {
               "name": "Validation Error",
@@ -1241,7 +1279,7 @@
                   {
                     "description": "Added as a part of security scheme: bearer",
                     "key": "Authorization",
-                    "value": "Bearer <token>"
+                    "value": "Bearer {{access_token}}"
                   }
                 ],
                 "body": {
@@ -1281,12 +1319,147 @@
           ]
         }
       ]
+    },
+    {
+      "name": "가져오기",
+      "item": [
+        {
+          "name": "Takeout 업로드",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/imports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "imports"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "가져오기 결과 조회",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/imports/{{job_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "imports",
+                "{{job_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "검토·오류 항목 조회",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/imports/{{job_id}}/issues?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "imports",
+                "{{job_id}}",
+                "issues"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
     {
       "key": "baseUrl",
-      "value": "/"
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "email",
+      "value": "you@example.com"
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "track_id",
+      "value": ""
+    },
+    {
+      "key": "job_id",
+      "value": ""
     }
   ]
 }
