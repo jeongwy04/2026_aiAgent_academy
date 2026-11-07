@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.db import session_scope
+from app.database import session_scope
 from app.models import AuthSession, utcnow
-from app.security import limiter
+from app.services.rate_limiter import limiter
 
 
 def sync(client, headers, events):
@@ -214,3 +214,35 @@ def test_concurrent_event_updates(client, member, make_event):
     stats = client.get(f"/api/v1/tracks/{id_}/stats", headers=headers).json()
     assert (stats["event_count"], stats["total_listened_ms"]) == (1, 120_000)
 
+
+
+def test_chat_tool_calling_and_regex_fallback(client, member, make_event, monkeypatch):
+    headers, _, _ = member()
+    track_id(client, headers, make_event(ms=60_000))
+    monkeypatch.setenv("PICKLE_API_KEY", "test-key")
+    get_settings.cache_clear()
+
+    class FakeLLM:
+        def __init__(self, calls):
+            self.calls = calls
+
+        def invoke(self, messages):
+            if isinstance(self.calls, Exception):
+                raise self.calls
+            return type("Msg", (), {"tool_calls": self.calls})()
+
+    def ask(question, calls):
+        monkeypatch.setattr("app.ai.api_use.chat_classify._llm", lambda *_: FakeLLM(calls))
+        return client.post("/api/v1/chat", headers=headers, json={"question": question}).json()
+
+    # Phrasing the regex can't parse; the LLM supplies metric and title.
+    answer = ask("입춘은 누적으로 얼마 동안 재생됐나요", [{"name": "get_total_listen_time", "args": {"title": "입춘"}}])
+    assert answer["status"] == "answered" and answer["total_listened_ms"] == 60_000
+    answer = ask("입춘 처음이랑 총합", [{"name": "get_listen_summary", "args": {"title": "입춘"}}])
+    assert answer["metric"] == "both" and answer["first_recorded_at"] is not None
+    assert ask("오늘 날씨 어때", [])["status"] == "unsupported"
+    # Scope guard runs before the LLM, even if it would call a tool.
+    assert ask("다른 사용자 입춘 총 재생 시간", [{"name": "get_total_listen_time", "args": {"title": "입춘"}}])["status"] == "unsupported"
+    # API failure falls back to the regex classifier.
+    answer = ask("입춘 얼마나 들었어?", RuntimeError("boom"))
+    assert answer["status"] == "answered" and answer["total_listened_ms"] == 60_000
