@@ -5,23 +5,21 @@
 """
 import logging
 import re
-from datetime import datetime
+from dataclasses import dataclass, field
 from decimal import Decimal
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.ai.api_use.chat_classify import chat_model
-from app.ai.api_use.query.stats_validator import guard_stats_sql
+from app.ai.api_use.query.stats_validator import MAX_ROWS, guard_stats_sql
 from app.ai.api_use.query.validator import UnsafeSQL
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-MAX_ROWS = 50
 SQL_PROMPT = """너는 PostgreSQL 전문가다. 사용자 본인의 음악 청취 기록 통계 질문을 SELECT 문 하나로 작성하라.
 
 테이블 (이미 현재 사용자 데이터로 한정되어 있으므로 user_id 조건을 쓰지 마라):
@@ -30,7 +28,8 @@ SQL_PROMPT = """너는 PostgreSQL 전문가다. 사용자 본인의 음악 청�
 - 조인: listen_events.track_id = tracks.id
 
 규칙:
-- 날짜·월·요일 계산은 observed_at AT TIME ZONE '{tz}' 기준. 오늘은 {today} ({tz}).
+- 날짜·월·요일 계산은 observed_at AT TIME ZONE '{tz}' 기준.
+- 오늘·이번 주·이번 달·지난달·작년 같은 기준 시점은 반드시 now() AT TIME ZONE '{tz}'로 계산하라 (CURRENT_DATE 금지).
 - 재생 시간 열 이름은 _ms로 끝나게 하라 (예: total_ms).
 - LIMIT은 {max_rows} 이하. CTE(WITH), UNION, 주석, 세미콜론, 파라미터는 쓰지 마라.
 - 설명이나 마크다운 없이 SQL만 출력하라."""
@@ -47,11 +46,17 @@ def _plain(value):
     return value
 
 
-def run_stats(session: Session, user_id: UUID, question: str) -> list[dict] | None:
-    """결과 행 목록(최대 50행), 또는 LLM 오류·3회 실패 시 None."""
+@dataclass
+class StatsResult:
+    rows: list[dict] | None  # None: LLM 오류 또는 3회 모두 실패
+    attempts: list[dict] = field(default_factory=list)  # [{"sql": ..., "error": str | None}, ...]
+
+
+def run_stats(session: Session, user_id: UUID, question: str) -> StatsResult:
+    """결과 행(최대 50행)과 시도별 생성 SQL. "오늘"은 프롬프트·평가 모두 DB의 now() 기준."""
     settings = get_settings()
-    tz = settings.display_timezone
-    system = SQL_PROMPT.format(tz=tz, today=datetime.now(ZoneInfo(tz)).date(), max_rows=MAX_ROWS)
+    system = SQL_PROMPT.format(tz=settings.display_timezone, max_rows=MAX_ROWS)
+    result = StatsResult(rows=None)
     messages = [("system", system), ("human", question)]
     dialect = session.bind.dialect.name
     try:
@@ -63,12 +68,18 @@ def run_stats(session: Session, user_id: UUID, question: str) -> list[dict] | No
                 with session.begin_nested():  # A failed statement must not abort the request transaction.
                     rows = session.connection().exec_driver_sql(safe).mappings().fetchmany(MAX_ROWS)
                 # Aggregates over no rows return one all-NULL row: that means "no records".
-                return [{key: _plain(value) for key, value in row.items()} for row in rows
-                        if any(value is not None for value in row.values())]
+                result.rows = [{key: _plain(value) for key, value in row.items()} for row in rows
+                               if any(value is not None for value in row.values())]
+                result.attempts.append({"sql": sql, "error": None})
+                break
             except (UnsafeSQL, SQLAlchemyError) as error:
                 feedback = str(getattr(error, "orig", None) or error)[:300]
-                logger.info("Text-to-SQL attempt rejected: %s", feedback)
+                result.attempts.append({"sql": sql, "error": feedback})
                 messages += [("ai", sql), ("human", f"이 SQL은 실패했습니다: {feedback}\n규칙을 지켜 고친 SQL만 다시 출력하라.")]
     except Exception:
         logger.warning("Text-to-SQL LLM call failed", exc_info=True)
-    return None
+    # Generated SQL can contain song titles from the question: DEBUG only, never shown to
+    # end users (see CHAT_DEBUG). INFO keeps just the outcome.
+    logger.info("Text-to-SQL attempts=%s ok=%s", len(result.attempts), result.rows is not None)
+    logger.debug("Text-to-SQL attempts detail: %s", result.attempts)
+    return result
