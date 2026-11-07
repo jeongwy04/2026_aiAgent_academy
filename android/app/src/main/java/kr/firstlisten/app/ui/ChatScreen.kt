@@ -56,8 +56,9 @@ fun ChatScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 state.selectedTrack?.let { track ->
-                    Text("선택한 곡 · ${track.title}", style = MaterialTheme.typography.titleSmall)
+                    Text("대화 중인 곡 · ${track.title}", style = MaterialTheme.typography.titleSmall)
                     Text(track.artist ?: "가수 정보 없음", style = MaterialTheme.typography.bodySmall)
+                    Text("'이 노래', '그 노래'로 물으면 이 곡 기준으로 답합니다.", style = MaterialTheme.typography.bodySmall)
                 } ?: Text("곡명을 질문에 쓰거나 내 곡에서 선택하세요.")
                 Row {
                     TextButton(onClick = onChooseTrack) { Text("내 곡에서 선택") }
