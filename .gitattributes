@@ -1,2 +1,5 @@
+# Normalize line endings in the repo (LF) so Mac/Windows checkouts don't show phantom changes
+* text=auto
+
 # Shell scripts run inside Linux containers: CRLF breaks them (set: Illegal option -)
 *.sh text eol=lf
