@@ -36,7 +36,14 @@ def test_grounded_numbers():
     assert not grounded("입춘을 3시간 들었어요.", data, 1)  # input has 3분, not 3시간
     assert not grounded("입춘을 2분 3시간 들었어요.", data, 1)
     assert not grounded("총 123분이에요.", data, 1)  # computed minutes are rejected
-    assert grounded("1위는 A, 2위는 B예요.", "곡: A\n곡: B", 2)  # ordinals for multi-row results
+    two = "곡: A, 청취 횟수: 4회\n곡: B, 청취 횟수: 4회"
+    assert grounded("1위는 A, 2번째는 B예요.", two, 2)  # ordinals for multi-row results
+    assert not grounded("A를 2번 들었어요.", two, 2)  # "N번" reads as a count: rejected
+    assert not grounded("A를 2회 들었어요.", two, 2)
+    assert grounded("A를 4회 들었어요.", two, 2)
+    for korean in ("세 곡을 들었어요.", "두 시간 들었어요.", "열네 번 들었어요.", "입춘을 한 번 들었어요."):
+        assert not grounded(korean, data, 1), korean
+    assert grounded("한로로의 입춘을 2시간 3분 들었어요.", data, 1)  # 한로로 is not a number word
 
 
 def test_summarize_accepts_grounded_and_falls_back(monkeypatch):
@@ -72,3 +79,9 @@ def test_chat_summary_flag(client, member, make_event, monkeypatch):
     on = client.post("/api/v1/chat", headers=headers, json={"question": "제일 많이 들은 곡"}).json()
     assert on["answer"] == "가장 많이 들은 곡은 입춘이고 1분 들었어요." and on["debug"]["summary"]["used"]
     assert on["rows"] == off["rows"]  # raw rows unchanged for the app
+    # Multi-row results always use the template (no LLM call)
+    sync(client, headers, [make_event(ms=90_000, title="봄", external_id="spring")])
+    calls = fake.calls
+    many = client.post("/api/v1/chat", headers=headers, json={"question": "제일 많이 들은 곡"}).json()
+    assert len(many["rows"]) == 2 and many["answer"].startswith("1. ") and fake.calls == calls
+    assert "summary" not in many["debug"]

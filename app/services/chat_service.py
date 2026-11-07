@@ -44,7 +44,9 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
             return ChatOut(question=request.question, status="unsupported", metric="stats", debug=debug,
                            answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
         answer = format_rows(result.rows, request.question)
-        if settings.chat_llm_summary and result.rows:
+        # Single row only: in multi-row (ranking) results the guard can't catch swapped
+        # track/number pairs, and the numbered template already reads well.
+        if settings.chat_llm_summary and len(result.rows) == 1:
             answer, summary_info = summarize(request.question, result.rows, answer)
             if debug is not None:
                 debug["summary"] = summary_info
