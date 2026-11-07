@@ -27,8 +27,9 @@ def owned_track(session: Session, user_id: uuid.UUID, track_id: uuid.UUID) -> Tr
 
 
 def track_stats(session: Session, user_id: uuid.UUID, track: Track) -> StatsOut:
-    first, total, count = session.execute(select(
-        func.min(ListenEvent.observed_at), func.coalesce(func.sum(ListenEvent.listened_ms), 0), func.count()
+    first, total, count, measured = session.execute(select(
+        func.min(ListenEvent.observed_at), func.sum(ListenEvent.listened_ms), func.count(), func.count(ListenEvent.listened_ms)
     ).where(ListenEvent.user_id == user_id, ListenEvent.track_id == track.id)).one()
     return StatsOut(track=TrackOut.model_validate(track), first_recorded_at=first,
-                    total_listened_ms=int(total), event_count=count)
+                    total_listened_ms=int(total) if total is not None else None, event_count=count,
+                    measured_event_count=measured, unknown_duration_event_count=count - measured)

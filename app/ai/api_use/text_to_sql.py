@@ -23,7 +23,7 @@ MAX_ATTEMPTS = 3
 SQL_PROMPT = """너는 PostgreSQL 전문가다. 사용자 본인의 음악 청취 기록 통계 질문을 SELECT 문 하나로 작성하라.
 
 테이블 (이미 현재 사용자 데이터로 한정되어 있으므로 user_id 조건을 쓰지 마라):
-- listen_events(track_id uuid, observed_at timestamptz UTC 저장, listened_ms bigint: 이 청취 이벤트의 재생 시간 ms)
+- listen_events(track_id uuid, observed_at timestamptz UTC 저장, listened_ms bigint nullable: 관찰한 재생 시간 ms, source text)
 - tracks(id uuid, title text, artist text, album text)
 - 조인: listen_events.track_id = tracks.id
 
@@ -31,6 +31,7 @@ SQL_PROMPT = """너는 PostgreSQL 전문가다. 사용자 본인의 음악 청�
 - 날짜·월·요일 계산은 observed_at AT TIME ZONE '{tz}' 기준.
 - 오늘·이번 주·이번 달·지난달·작년 같은 기준 시점은 반드시 now() AT TIME ZONE '{tz}'로 계산하라 (CURRENT_DATE 금지).
 - 재생 시간 열 이름은 _ms로 끝나게 하라 (예: total_ms).
+- source='google_takeout_my_activity'의 listened_ms는 알 수 없어 NULL이다. 0초나 30초로 대체하지 마라. 시간 질문에는 SUM(listened_ms)와 COUNT(listened_ms), COUNT(*)-COUNT(listened_ms)를 함께 반환해 미확인 건수를 구분하라.
 - LIMIT은 {max_rows} 이하. CTE(WITH), UNION, 주석, 세미콜론, 파라미터는 쓰지 마라.
 - 설명이나 마크다운 없이 SQL만 출력하라."""
 

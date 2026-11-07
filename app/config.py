@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     auth_requests_per_minute: int = Field(default=10, ge=1, le=1000)
     query_timeout_ms: int = Field(default=2000, ge=100, le=30_000)
     display_timezone: str = "Asia/Seoul"
+    import_upload_max_bytes: int = Field(default=104_857_600, ge=1024, le=104_857_600)
+    import_requests_per_minute: int = Field(default=3, ge=1, le=100)
+    import_batch_size: int = Field(default=500, ge=1, le=1000)
     # Empty key = regex classifier only (tests, offline development).
     pickle_api_key: str = ""
     chat_model: str = "pickle-general"

@@ -50,16 +50,16 @@ def verify_database_roles() -> None:
                 SELECT r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb
                        OR EXISTS (
                          SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                         WHERE n.nspname = 'public' AND c.relname IN ('tracks', 'listen_events')
+                         WHERE n.nspname = 'public' AND c.relname IN ('tracks', 'listen_events', 'import_jobs', 'import_evidence', 'import_issues')
                          AND (pg_has_role(current_user, c.relowner, 'MEMBER')
                               OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity))
                 FROM pg_roles r WHERE r.rolname = current_user
             """)).scalar_one()
             count = connection.execute(text("""
                 SELECT count(*) FROM pg_tables WHERE schemaname = 'public'
-                AND tablename IN ('members', 'auth_sessions', 'tracks', 'listen_events')
+                AND tablename IN ('members', 'auth_sessions', 'tracks', 'listen_events', 'import_jobs', 'import_evidence', 'import_issues')
             """)).scalar_one()
-            if unsafe or count != 4:
+            if unsafe or count != 7:
                 raise RuntimeError("DB 역할 또는 마이그레이션이 안전하게 설정되지 않았습니다.")
             if readonly:
                 can_write = connection.execute(text("""

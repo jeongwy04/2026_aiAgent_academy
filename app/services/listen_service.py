@@ -60,7 +60,7 @@ def save_event(session: Session, user_id: uuid.UUID, event: EventInput) -> Event
             "observed_at": least(ListenEvent.observed_at, event_insert.excluded.observed_at),
             "updated_at": utcnow(),
         },
-        where=ListenEvent.track_id == track_id,
+        where=(ListenEvent.track_id == track_id) & (ListenEvent.source == "android_media_session"),
     ).returning(ListenEvent.listened_ms)).scalar_one_or_none()
     if stored is None:
         raise HTTPException(409, "같은 event_id를 다른 곡에 재사용할 수 없습니다. 배치 전체가 취소되었습니다.")
