@@ -37,6 +37,7 @@ services:
       PICKLE_API_KEY: ${PICKLE_API_KEY:-}
       CHAT_REQUESTS_PER_MINUTE: ${CHAT_REQUESTS_PER_MINUTE:-20}
       CHAT_DEBUG: ${CHAT_DEBUG:-false}
+      CHAT_LLM_SUMMARY: ${CHAT_LLM_SUMMARY:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
