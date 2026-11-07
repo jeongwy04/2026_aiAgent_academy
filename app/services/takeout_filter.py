@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-PARSER_VERSION = "1.0.0"
+from app.services.takeout_metadata import extract_metadata
+
+PARSER_VERSION = "1.1.0"
 SOURCE = "google_takeout_my_activity"
 DEFAULT_MAX_BYTES = 100 * 1024 * 1024
 DEFAULT_MAX_ITEMS = 500_000
@@ -156,7 +158,7 @@ def classify(record: object) -> dict:
     if not title:
         return _result("review", "unrecognized_action_title", video_id=ids[0], played_at=utc)
 
-    # Channel metadata is not a verified artist identity.
+    # Retain channel hints, but never treat an arbitrary uploader as the artist.
     subtitles = record.get("subtitles", [])
     if not isinstance(subtitles, list) or any(
         not isinstance(s, dict)
@@ -175,7 +177,7 @@ def classify(record: object) -> dict:
         "source_time": raw_time,
         "source_event_key": hashlib.sha256(key_payload.encode("utf-8")).hexdigest(),
         "raw_title": raw_title,
-        "display_title": title,
+        **extract_metadata(title, channels),
         "source_url": raw_url,
         "channels": channels,
         "listened_ms": None,

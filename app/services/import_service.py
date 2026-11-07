@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -69,12 +69,28 @@ def prepare_import(path: str | Path, member: str | None = None):
 
 
 def _save_batch(session: Session, user_id: uuid.UUID, job_id: uuid.UUID, batch: list) -> tuple[int, int]:
-    identities = {_track_key(item["event"]["external_id"]): item["event"] for item in batch}
+    identities = {}
+    for item in batch:
+        event = item["event"]
+        key = _track_key(event["external_id"])
+        # A later occurrence without artist metadata must not discard a useful hint.
+        if key not in identities or (identities[key]["artist"] is None and event["artist"] is not None):
+            identities[key] = event
     track_rows = [{"id": uuid.uuid4(), "user_id": user_id, "source_key": key,
                    "external_id": event["external_id"], "title": event["display_title"],
-                   "artist": None, "album": None, "created_at": utcnow()} for key, event in identities.items()]
+                   "artist": event["artist"], "album": None, "created_at": utcnow()} for key, event in identities.items()]
     created = session.execute(insert_for(session, Track).values(track_rows).on_conflict_do_nothing(
         index_elements=[Track.user_id, Track.source_key]).returning(Track.id)).scalars().all()
+    # Re-uploading an old export repairs missing metadata without adding listens or
+    # replacing existing artist metadata (including metadata collected on Android).
+    enriched = [row for row in track_rows if row["artist"] is not None]
+    if enriched:
+        statement = insert_for(session, Track).values(enriched)
+        session.execute(statement.on_conflict_do_update(
+            index_elements=[Track.user_id, Track.source_key],
+            set_={"artist": statement.excluded.artist, "title": statement.excluded.title},
+            where=Track.artist.is_(None),
+        ))
     tracks = dict(session.execute(select(Track.source_key, Track.id).where(
         Track.user_id == user_id, Track.source_key.in_(identities))).all())
     events = []

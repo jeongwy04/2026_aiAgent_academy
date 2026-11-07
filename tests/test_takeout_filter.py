@@ -29,7 +29,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(out["event"]["played_at"], "2026-11-06T18:00:00.123000Z")
         self.assertEqual(out["event"]["display_title"], "예시 곡")
         self.assertIsNone(out["event"]["listened_ms"])
-        self.assertNotIn("artist", out["event"])
+        self.assertIsNone(out["event"]["artist"])
         self.assertEqual(r, original)
 
     def test_equivalent_times_and_urls_share_key(self):
@@ -39,6 +39,12 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(a["source_event_key"], b["source_event_key"])
         c = classify(sample(time="2026-11-06T18:00:00.124Z"))["event"]
         self.assertNotEqual(a["source_event_key"], c["source_event_key"])
+
+    def test_metadata_enrichment_does_not_change_listen_identity(self):
+        old = classify(sample(title="Watched More", subtitles=[]))["event"]
+        enriched = classify(sample(title="Watched More", subtitles=[{"name": "ILLIT - Topic"}]))["event"]
+        self.assertEqual(old["source_event_key"], enriched["source_event_key"])
+        self.assertEqual(enriched["artist"], "ILLIT")
 
     def test_regular_youtube_excluded(self):
         self.assertEqual(classify(sample(header="YouTube"))["reason"], "not_youtube_music")

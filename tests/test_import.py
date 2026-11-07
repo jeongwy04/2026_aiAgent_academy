@@ -76,6 +76,56 @@ def test_android_and_import_share_track_but_not_duration(client, member, make_ev
     assert (stats["event_count"], stats["total_listened_ms"], stats["measured_event_count"], stats["unknown_duration_event_count"]) == (2, 45_000, 1, 1)
 
 
+def test_reupload_repairs_old_missing_artist_without_adding_listens(client, member):
+    headers, user, _ = member()
+    rows = [activity(title="Effie - Red Horse 을(를) 시청했습니다.", subtitles=[{"name": "Effie"}])]
+    assert upload(client, headers, rows).json()["inserted"] == 1
+    track = client.get("/api/v1/tracks", headers=headers).json()["items"][0]
+    assert (track["title"], track["artist"]) == ("Red Horse", "Effie")
+    # Model a track previously imported with parser 1.0.0.
+    with session_scope(get_settings().database_url) as session:
+        set_user_context(session, user["id"])
+        old = session.get(Track, uuid.UUID(track["id"]))
+        old.title = "Effie - Red Horse"
+        old.artist = None
+    retry = upload(client, headers, rows)
+    assert retry.status_code == 200, retry.text
+    result = retry.json()
+    assert result["parser_version"] == "1.1.0"
+    assert (result["inserted"], result["duplicates"], result["new_tracks"]) == (0, 1, 0)
+    items = client.get("/api/v1/tracks?q=Effie", headers=headers).json()["items"]
+    assert len(items) == 1
+    assert (items[0]["id"], items[0]["title"], items[0]["artist"]) == (track["id"], "Red Horse", "Effie")
+    stats = client.get(f"/api/v1/tracks/{track['id']}/stats", headers=headers).json()
+    assert stats["event_count"] == 1 and stats["total_listened_ms"] is None
+
+
+def test_import_preserves_existing_android_metadata(client, member, make_event):
+    headers, _, _ = member()
+    event = make_event(external_id="abcdefghijk", title="기기에서 받은 제목", artist="기기에서 받은 가수")
+    assert client.post("/api/v1/listens/sync", headers=headers, json={"events": [event]}).status_code == 200
+    response = upload(client, headers, [activity(title="Watched Export Title", subtitles=[{"name": "Export Artist - Topic"}])])
+    assert response.status_code == 200, response.text
+    assert response.json()["new_tracks"] == 0
+    track = client.get("/api/v1/tracks", headers=headers).json()["items"][0]
+    assert (track["title"], track["artist"]) == ("기기에서 받은 제목", "기기에서 받은 가수")
+
+
+@pytest.mark.parametrize("batch_size", [1, 500])
+@pytest.mark.parametrize("rich_first", [True, False])
+def test_metadata_survives_other_occurrences_with_less_information(client, member, monkeypatch, batch_size, rich_first):
+    headers, _, _ = member()
+    monkeypatch.setenv("IMPORT_BATCH_SIZE", str(batch_size))
+    get_settings.cache_clear()
+    rich = activity(title="Watched More", subtitles=[{"name": "ILLIT - Topic"}])
+    bare = activity(title="Watched More", at="2025-01-02T00:00:00Z", subtitles=[])
+    response = upload(client, headers, [rich, bare] if rich_first else [bare, rich])
+    assert response.status_code == 200, response.text
+    assert response.json()["new_tracks"] == 1
+    track = client.get("/api/v1/tracks", headers=headers).json()["items"][0]
+    assert (track["title"], track["artist"]) == ("More", "ILLIT")
+
+
 def test_storage_failure_rolls_back_every_data_batch(client, member, monkeypatch):
     from app.services import import_service
     headers, user, _ = member()

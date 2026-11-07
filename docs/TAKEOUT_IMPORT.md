@@ -48,7 +48,7 @@ curl.exe -X POST "http://127.0.0.1:8000/api/v1/imports" `
 {
   "job_id": "00000000-0000-0000-0000-000000000001",
   "status": "completed",
-  "parser_version": "1.0.0",
+  "parser_version": "1.1.0",
   "json_sha256": "원본 JSON 바이트의 SHA-256",
   "total": 151462,
   "accepted": 18793,
@@ -93,7 +93,16 @@ erDiagram
 
 기존 이벤트에 `source='android_media_session'`이 기본 적용됩니다. Android는 기존처럼 30,000~86,400,000ms 범위만 저장합니다.
 
-Takeout은 `source='google_takeout_my_activity'`, `listened_ms=NULL`이며 출처 이벤트 키가 필수입니다. DB CHECK로 출처·시간 조합을 강제합니다. 0초·30초로 바꾸지 않습니다. 채널명을 가수로 확정하지 않기 때문에 신규 곡의 `artist`는 NULL입니다.
+Takeout은 `source='google_takeout_my_activity'`, `listened_ms=NULL`이며 출처 이벤트 키가 필수입니다. DB CHECK로 출처·시간 조합을 강제합니다. 0초·30초로 바꾸지 않습니다.
+
+파서 `1.1.0`부터 다음 근거가 있으면 표시용 제목과 가수를 추출합니다. 외부 API·LLM으로 조회하지 않으며, 가수의 공식 신원을 검증하는 기능은 아닙니다.
+
+- 단일 `가수 - Topic` 채널: `- Topic`을 제거해 가수 힌트로 사용합니다. 제목의 가수 접두·접미가 일치할 때만 분리합니다.
+- `가수 - 곡명` / `곡명 - 가수`: 단일 채널명과 가수가 일치할 때 분리합니다.
+- `가수 '곡명' MV` / `가수 - '곡명' M/V`: 제목에 명시된 정보를 분리합니다. 레이블이 올린 영상도 처리합니다.
+- 인식한 영상 접미사만 제거하고 곡의 버전·피처링 표기는 보존합니다. 일반 업로더명·여러 채널명만으로 가수를 확정하지 않습니다. 불명확한 하이픈 제목이나 Topic 근거 없는 커버·리믹스·가이드 영상은 원래 제목과 `artist=NULL`을 유지합니다. 분류 출력의 `metadata_basis`에 추출 근거를 남기며 원본은 기존 `import_evidence`로 보존합니다.
+
+이전 버전으로 가져온 파일을 재업로드하면 기존 곡의 빈 가수와 제목을 보완합니다. 이미 있는 가수 정보는 덮어쓰지 않습니다. 곡의 외부 ID와 청취 이벤트 키는 바뀌지 않으므로 중복 업로드 시 청취 횟수는 늘지 않습니다. 새 백엔드를 적용한 뒤 같은 JSON을 다시 가져오고 Android의 **내 곡**을 새로고침하면 됩니다.
 
 기존 곡 목록·상세·통계에서도 가져온 기록을 조회할 수 있습니다. `total_listened_ms`는 측정 가능한 시간이 없으면 NULL이며, `measured_event_count`와 `unknown_duration_event_count`를 함께 반환합니다. Android와 Takeout이 섞이면 알려진 시간만 더합니다. 최초 기록 시각은 둘을 포함한 최솟값입니다.
 

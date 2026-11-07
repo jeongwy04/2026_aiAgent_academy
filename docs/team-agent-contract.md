@@ -98,7 +98,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 | 곡 상세 | `GET /api/v1/tracks/{track_id}` | `Track` |
 | 곡별 통계 | `GET /api/v1/tracks/{track_id}/stats` | `{ "track": Track, "first_recorded_at": "<date-time 또는 null>", "total_listened_ms": "<정수 또는 null>", "event_count": 0, "measured_event_count": 0, "unknown_duration_event_count": 0 }` |
 
-`Track`은 `{ "id": "<uuid>", "title": "...", "artist": "<문자열 또는 null>", "album": "<문자열 또는 null>", "external_id": "<문자열 또는 null>" }`다. **`artist`는 null일 수 있다.** Takeout으로 가져온 곡은 가수 정보가 없으므로, 앱은 null을 허용하는 타입으로 파싱하고 "가수 정보 없음"처럼 표시한다. `q`는 최대 300자, `limit`은 1~100(기본 20), `offset`은 0~100,000(기본 0)이다. 페이지의 빈 목록과 통계의 `first_recorded_at: null`은 정상적인 빈 상태로 보여준다. 모든 검색과 조회는 로그인한 본인의 곡만 대상으로 한다.
+`Track`은 `{ "id": "<uuid>", "title": "...", "artist": "<문자열 또는 null>", "album": "<문자열 또는 null>", "external_id": "<문자열 또는 null>" }`다. **`artist`는 null일 수 있다.** Takeout은 Topic 채널이나 명시적인 제목 형식에서 가수를 추출할 수 있지만 근거가 부족하면 null이므로, 앱은 null을 허용하는 타입으로 파싱하고 "가수 정보 없음"처럼 표시한다. `q`는 최대 300자, `limit`은 1~100(기본 20), `offset`은 0~100,000(기본 0)이다. 페이지의 빈 목록과 통계의 `first_recorded_at: null`은 정상적인 빈 상태로 보여준다. 모든 검색과 조회는 로그인한 본인의 곡만 대상으로 한다.
 
 곡별 통계 필드의 의미는 다음과 같다.
 
@@ -120,7 +120,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 - `ImportSummary` 주요 필드: `total` = `inserted`(신규) + `duplicates`(이미 있음) + `excluded`(제외) + `review`(검토 필요) + `errors`(오류), 그리고 `new_tracks`, `distinct_tracks`, `reasons`(사유별 건수).
 - 같은 파일을 다시 올려도 이미 저장된 기록은 `duplicates`로 세며 중복 집계하지 않는다.
 - 가져온 기록은 재생 시간을 알 수 없어 `listened_ms`가 null로 저장된다. 최초 기록일과 청취 횟수에는 반영되지만 총 재생 시간에는 포함되지 않는다.
-- 곡은 YouTube Music ID(`external_id`)로만 구분하고 `artist`는 null이다. **기기에서 수집한 곡과 같은 곡으로 합쳐지려면 Android가 같은 `external_id`를 보내야 한다.**
+- 곡은 YouTube Music ID(`external_id`)로만 구분한다. `artist`는 Topic 채널·명시적인 제목 형식에서 추출하며 불명확하면 null이다. 재업로드는 기존 곡의 빈 가수 정보를 보완하며 이미 있는 가수 정보는 유지한다. **기기에서 수집한 곡과 같은 곡으로 합쳐지려면 Android가 같은 `external_id`를 보내야 한다.**
 - 오류: `409` 같은 회원의 다른 가져오기가 처리 중이거나 이벤트 식별자 충돌, `413` 크기 초과, `422` 형식 오류, `429` 회원당 분당 3회 초과(`Retry-After`), `503` 저장 실패(같은 파일로 다시 시도 가능).
 
 ### 자연어 질문
