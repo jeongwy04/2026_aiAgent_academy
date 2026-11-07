@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kr.firstlisten.app.capture.MusicNotificationListenerService
 import kr.firstlisten.app.data.ListenEventEntity
+import kr.firstlisten.app.data.SessionStore
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,9 +44,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun authenticate(url: String, email: String, password: String, register: Boolean) = action {
-        val baseUrl = graph.api.normalizeBaseUrl(url)
+    fun authenticate(email: String, password: String, register: Boolean) = action {
+        val baseUrl = graph.api.normalizeBaseUrl(SessionStore.DEFAULT_BASE_URL)
         require(email.isNotBlank() && password.isNotEmpty()) { "이메일과 비밀번호를 입력해 주세요." }
+        require(!register || password.length in 10..128) { "비밀번호는 10자 이상 128자 이하로 입력해 주세요." }  // server: MemberCreate
         if (register) graph.api.register(baseUrl, email.trim(), password)
         val token = graph.api.login(baseUrl, email.trim(), password)
         val member = graph.api.me(baseUrl, token.access_token)

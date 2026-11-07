@@ -41,7 +41,6 @@ fun RecordScreen(model: MainViewModel, openPermissions: () -> Unit) {
     val recent by model.recent.collectAsStateWithLifecycle()
     val pending by model.pending.collectAsStateWithLifecycle()
     val rejected by model.rejected.collectAsStateWithLifecycle()
-    var url by remember(session.baseUrl) { mutableStateOf(session.baseUrl) }
     var email by remember(session.email) { mutableStateOf(session.email.orEmpty()) }
     // Passwords deliberately do not survive Activity recreation or process death.
     var password by remember { mutableStateOf("") }
@@ -57,26 +56,23 @@ fun RecordScreen(model: MainViewModel, openPermissions: () -> Unit) {
                     Text("계정", style = MaterialTheme.typography.titleLarge)
                     if (session.memberId == null || session.needsLogin || session.expired) {
                         if (session.memberId != null) Text("로그인이 만료되었습니다. 같은 계정으로 로그인하면 전송을 이어갑니다.")
-                        OutlinedTextField(url, { url = it }, label = { Text("서버 주소") }, singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(email, { email = it }, label = { Text("이메일") }, singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(password, { password = it }, label = { Text("비밀번호") }, singleLine = true,
+                        OutlinedTextField(password, { password = it }, label = { Text("비밀번호 (10자 이상)") }, singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(enabled = !busy, onClick = {
-                                model.authenticate(url, email, password, false)
+                                model.authenticate(email, password, false)
                                 password = ""
                             }) { Text("로그인") }
                             OutlinedButton(enabled = !busy, onClick = {
-                                model.authenticate(url, email, password, true)
+                                model.authenticate(email, password, true)
                                 password = ""
                             }) { Text("회원가입") }
                         }
                     } else {
                         Text(session.email.orEmpty())
-                        Text(session.baseUrl, style = MaterialTheme.typography.bodySmall)
                     }
                     if (session.memberId != null) TextButton(enabled = !busy, onClick = model::logout) { Text("로그아웃") }
                 }

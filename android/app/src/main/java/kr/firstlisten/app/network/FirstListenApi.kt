@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kr.firstlisten.core.HttpFailure
@@ -65,7 +66,8 @@ import kotlin.coroutines.resumeWithException
 class FirstListenApi(
     private val allowHttp: Boolean,
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
+        // Stats chat runs LLM Text-to-SQL with retries (often 10–30s); OkHttp's default 10s read timeout cut it off.
+        .connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).callTimeout(60, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build(),
 ) : SyncTransport {
     private val json = Json { ignoreUnknownKeys = true }
@@ -126,7 +128,11 @@ class FirstListenApi(
         return client.newCall(builder.build()).await().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val detail = runCatching { json.parseToJsonElement(text).jsonObject["detail"]?.jsonPrimitive?.content }.getOrNull()
+                val detail = runCatching {
+                    val node = json.parseToJsonElement(text).jsonObject["detail"]
+                    node?.jsonPrimitive?.content
+                        ?: node?.jsonArray?.firstOrNull()?.jsonObject?.get("msg")?.jsonPrimitive?.content
+                }.getOrNull()
                 throw HttpFailure(response.code, detail ?: "서버 요청 실패 (${response.code})",
                     response.header("Retry-After")?.toLongOrNull())
             }

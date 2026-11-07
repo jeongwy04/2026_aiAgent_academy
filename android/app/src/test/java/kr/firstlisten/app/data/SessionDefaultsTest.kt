@@ -12,10 +12,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class SessionDefaultsTest {
-    @Test fun `fresh installs point to the USB forwarded development server`() {
+    @Test fun `fresh installs point to the fixed development server`() {
         val context = ApplicationProvider.getApplicationContext<Application>()
         context.getSharedPreferences("firstlisten-session", 0).edit().clear().commit()
-        assertEquals("http://127.0.0.1:8000", SessionStore(context).state.value.baseUrl)
+        assertEquals("https://state-gilled-spleen.ngrok-free.dev", SessionStore(context).state.value.baseUrl)
     }
 
     @Test fun `legacy sessions with omitted server retain their original account namespace`() {
