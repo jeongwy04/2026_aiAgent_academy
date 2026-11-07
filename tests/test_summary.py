@@ -21,7 +21,12 @@ class Fake:
 
 def use(monkeypatch, reply):
     fake = Fake(reply)
-    monkeypatch.setattr("app.ai.api_use.summary.chat_model", lambda *_: fake)
+    def model(*args, **options):
+        # The template already exists: the summary must not wait 10s x 2 like the other calls.
+        assert options == {"timeout": 5, "max_retries": 0}
+        return fake
+
+    monkeypatch.setattr("app.ai.api_use.summary.chat_model", model)
     return fake
 
 
@@ -44,6 +49,10 @@ def test_grounded_numbers():
     for korean in ("세 곡을 들었어요.", "두 시간 들었어요.", "열네 번 들었어요.", "입춘을 한 번 들었어요."):
         assert not grounded(korean, data, 1), korean
     assert grounded("한로로의 입춘을 2시간 3분 들었어요.", data, 1)  # 한로로 is not a number word
+    rows_3 = [{"title": "입춘", "play_count": 4}, {"title": "봄", "play_count": 2}, {"title": "밤", "play_count": 1}]
+    assert not grounded("입춘을 2번 들었어요.", facts(rows_3), 3)  # 실제 4회 ("2번"은 순번으로 허용 안 함)
+    assert not grounded("입춘을 3 들었어요.", facts(rows_3), 3)  # 단위 없는 순번 N도 허용 안 함
+    assert not grounded("세 곡 들었어요.", "곡 수: 3개", 1)
 
 
 def test_summarize_accepts_grounded_and_falls_back(monkeypatch):

@@ -3,7 +3,7 @@
 CHAT_LLM_SUMMARY=true일 때만 동작합니다(기본 false). 본인 결과를 본인 답변용으로만 보냅니다.
 - 원본 숫자(밀리초 등) 대신 표시용으로 형식을 맞춘 값("2시간 3분", "2026년 10월")만 보냅니다.
 - 요약 문장의 숫자가 입력 값(또는 질문)에 모두 있어야 채택하고, 아니면 템플릿 문장을 씁니다.
-- LLM 오류·시간 초과(chat_model의 timeout)·빈 응답·너무 긴 응답도 템플릿으로 대체합니다.
+- LLM 오류·시간 초과(5초, 재시도 없음)·빈 응답·너무 긴 응답도 템플릿으로 대체합니다.
 """
 import logging
 import re
@@ -15,6 +15,7 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 MAX_CHARS = 300
+SUMMARY_TIMEOUT = 5  # seconds; on timeout the template answer is used
 # 숫자 + 단위. "2시간 3분" 입력에 "3시간"이 통과하지 않도록 단위까지 함께 비교합니다.
 NUMBER = re.compile(r"(\d+(?:\.\d+)?)\s*(시간|분|초|회|개|곡|년|월|일|주|시|위|건|번째|번)?")
 # 한글 수 표현("세 곡", "두 시간", "열네 번")은 숫자 검사를 피해 가므로, 나오면 요약을 버립니다.
@@ -56,7 +57,9 @@ def summarize(question: str, rows: list[dict], template: str) -> tuple[str, dict
     data = facts(rows)
     info = {"used": False, "numbers_ok": None, "candidate": None}
     try:
-        message = chat_model(settings.pickle_api_key, settings.chat_model, settings.llm_base_url).invoke([
+        # The template is already there: don't wait long (5s, no retry) for an optional summary.
+        message = chat_model(settings.pickle_api_key, settings.chat_model, settings.llm_base_url,
+                             timeout=SUMMARY_TIMEOUT, max_retries=0).invoke([
             ("system", SUMMARY_PROMPT),
             ("human", f"질문: {question}\n\n조회 결과:\n{data}\n\n참고 문장: {template}"),
         ])
