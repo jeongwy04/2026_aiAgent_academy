@@ -34,25 +34,25 @@ def find_candidates(session: Session, user_id: UUID, title: str) -> list[Track]:
 def answer_question(session: Session, user_id: UUID, request: ChatInput) -> ChatOut:
     metric, title = classify_question(request.question)
     if metric is None:
-        return ChatOut(status="unsupported", answer=UNSUPPORTED)
+        return ChatOut(question=request.question, status="unsupported", answer=UNSUPPORTED)
     if metric == "stats":
         result = run_stats(session, user_id, request.question)
         debug = {"sql_attempts": result.attempts} if get_settings().chat_debug else None
         if result.rows is None:
-            return ChatOut(status="unsupported", metric="stats", debug=debug,
+            return ChatOut(question=request.question, status="unsupported", metric="stats", debug=debug,
                            answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
-        return ChatOut(status="answered" if result.rows else "not_found", metric="stats", debug=debug,
+        return ChatOut(question=request.question, status="answered" if result.rows else "not_found", metric="stats", debug=debug,
                        answer=format_rows(result.rows), rows=result.rows)
     if request.track_id:
         track = owned_track(session, user_id, request.track_id)
     else:
         if title in UNSPECIFIED_TITLES:
-            return ChatOut(status="needs_track", metric=metric, answer="조회할 곡을 선택하거나 곡명을 알려 주세요.")
+            return ChatOut(question=request.question, status="needs_track", metric=metric, answer="조회할 곡을 선택하거나 곡명을 알려 주세요.")
         candidates = find_candidates(session, user_id, title)
         if not candidates:
-            return ChatOut(status="not_found", metric=metric, answer="해당 곡의 청취 기록이 없습니다.")
+            return ChatOut(question=request.question, status="not_found", metric=metric, answer="해당 곡의 청취 기록이 없습니다.")
         if len(candidates) != 1:
-            return ChatOut(status="ambiguous", metric=metric,
+            return ChatOut(question=request.question, status="ambiguous", metric=metric,
                            answer="같은 이름의 곡이 여러 개 있습니다. 곡을 선택해 다시 질문해 주세요.",
                            candidates=[TrackOut.model_validate(t) for t in candidates[:20]])
         track = candidates[0]
@@ -61,8 +61,8 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
     # For total-only queries, absence must be determined separately: SUM=0 is
     # not a license to invent a first date.
     if (metric in ("first", "both") and first is None) or (metric == "total" and not total):
-        return ChatOut(status="not_found", metric=metric, track=TrackOut.model_validate(track),
+        return ChatOut(question=request.question, status="not_found", metric=metric, track=TrackOut.model_validate(track),
                        answer="해당 곡의 청취 기록이 없습니다.")
     answer, first, total = build_answer(first, total)
-    return ChatOut(status="answered", metric=metric, answer=answer,
+    return ChatOut(question=request.question, status="answered", metric=metric, answer=answer,
                    track=TrackOut.model_validate(track), first_recorded_at=first, total_listened_ms=total)

@@ -98,7 +98,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 `POST /api/v1/chat` 요청은 `{"question":"입춘 언제부터 들었어?"}` 또는 `{"question":"이 노래 총 재생 시간이 얼마야?","track_id":"<선택한 곡 UUID>"}`다. 질문은 1~500자이며 `track_id`는 선택 사항이다.
 
-응답에는 `status`, `answer`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다.
+응답은 확인하기 쉽도록 `question`, `answer` 순서로 시작하며 기존 상세 필드를 유지한다. 응답에는 `question`, `answer`, `status`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다.
 
 - `answered`: 서버가 계산한 결과를 표시한다.
 - `needs_track`: “이 노래”를 가리키는 `track_id`가 아직 없다. 곡을 선택하게 한다.

@@ -1223,7 +1223,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"status\": \"answered\",\n  \"answer\": \"string\",\n  \"metric\": null,\n  \"track\": null,\n  \"candidates\": [\n    {\n      \"id\": \"cc689160-bea1-5a4e-f226-b0e55cc6bba1\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": \"string\",\n      \"external_id\": null\n    },\n    {\n      \"id\": \"1775cfc8-9ead-6eab-e110-87cab16df1fe\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": null,\n      \"external_id\": \"string\"\n    }\n  ],\n  \"first_recorded_at\": null,\n  \"total_listened_ms\": null\n}"
+              "body": "{\n  \"question\": \"입춘 얼마나 들었어?\",\n  \"answer\": \"string\",\n  \"status\": \"answered\",\n  \"metric\": null,\n  \"track\": null,\n  \"candidates\": [\n    {\n      \"id\": \"cc689160-bea1-5a4e-f226-b0e55cc6bba1\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": \"string\",\n      \"external_id\": null\n    },\n    {\n      \"id\": \"1775cfc8-9ead-6eab-e110-87cab16df1fe\",\n      \"title\": \"string\",\n      \"artist\": \"string\",\n      \"album\": null,\n      \"external_id\": \"string\"\n    }\n  ],\n  \"first_recorded_at\": null,\n  \"total_listened_ms\": null\n}"
             },
             {
               "name": "Validation Error",
