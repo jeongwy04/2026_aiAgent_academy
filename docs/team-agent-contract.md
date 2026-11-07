@@ -103,14 +103,13 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 `POST /api/v1/chat` 요청은 `{"question":"입춘 언제부터 들었어?"}` 또는 `{"question":"이 노래 총 재생 시간이 얼마야?","track_id":"<선택한 곡 UUID>"}`다. 질문은 1~500자이며 `track_id`는 선택 사항이다.
 
-응답에는 `status`, `answer`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다. `debug` 필드는 서버 개발·평가용(`CHAT_DEBUG=true`)으로만 채워지므로 앱에서 사용하지 않는다.
+응답은 확인하기 쉽도록 `question`(요청 질문 그대로), `answer` 순서로 시작하며 기존 상세 필드를 유지한다. 응답에는 `question`, `answer`, `status`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다. `debug` 필드는 서버 개발·평가용(`CHAT_DEBUG=true`)으로만 채워지므로 앱에서 사용하지 않는다.
 
 **결과 표시 방법**
 
 - 모든 상태에서 `answer`는 서버가 만든 한국어 문장이다. 기본으로 이 문장을 그대로 표시한다.
 - `metric`이 `first`/`total`/`both`이면 `first_recorded_at`(UTC, 표시할 때 `Asia/Seoul`로 변환)과 `total_listened_ms`(밀리초)를 구조화된 값으로 함께 쓸 수 있다.
 - `metric`이 `stats`이면 결과는 `rows`(최대 50행)에 있다. **열 이름은 질문마다 LLM이 정하므로 고정 스키마로 파싱하지 않는다.** `rows`를 표로 보여주려면 첫 행의 키를 열 제목으로 쓰고, 이름이 `_ms`로 끝나는 열은 밀리초이므로 시간 형식으로 바꿔 표시한다. 표를 만들지 않아도 `answer`만으로 결과가 전달된다.
-응답은 확인하기 쉽도록 `question`, `answer` 순서로 시작하며 기존 상세 필드를 유지한다. 응답에는 `question`, `answer`, `status`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다.
 
 - `answered`: 서버가 계산한 결과를 표시한다.
 - `needs_track`: “이 노래”를 가리키는 `track_id`가 아직 없다. 곡을 선택하게 한다.
