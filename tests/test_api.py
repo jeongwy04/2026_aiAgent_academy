@@ -304,3 +304,19 @@ def test_chat_text_to_sql_self_heals_and_stays_private(client, member, make_even
     # LLM failure on the stats path -> unsupported.
     answer, _ = ask("이번 주 청취 시간", Msg(tool_calls=stats_call), [RuntimeError("down")])
     assert answer["status"] == "unsupported"
+
+
+def test_chat_titles_with_period_or_sql_words(client, member, make_event):
+    headers, _, _ = member()
+    sync(client, headers, [
+        make_event(title="12월의 기적", artist="EXO", external_id="miracle"),
+        make_event(title="Raindrop", artist="테스트가수", external_id="raindrop", ms=120_000),
+    ])
+    first = client.post("/api/v1/chat", headers=headers, json={"question": "12월의 기적 언제부터 들었어?"}).json()
+    assert (first["status"], first["metric"]) == ("answered", "first"), first
+    total = client.post("/api/v1/chat", headers=headers, json={"question": "Raindrop 총 몇 시간 들었어?"}).json()
+    assert (total["status"], total["total_listened_ms"]) == ("answered", 120_000), total
+    # Deictic phrasing without track_id asks the user to pick a track (no title search)
+    for question in ["이 노래 제 최초 기록이 언제야?", "이노래 언제부터 들었어?"]:
+        response = client.post("/api/v1/chat", headers=headers, json={"question": question}).json()
+        assert response["status"] == "needs_track", response

@@ -41,6 +41,10 @@ def _events(now: datetime) -> tuple[list[tuple], list[tuple]]:
         ("Hype Boy", "NewJeans", "hypeboy", lm(10), 7 * MIN),  # 봄날 2곡 합(6분)보다 커서 제목·ID 어느 쪽으로 묶어도 3위
         # 30초 미만: 저장되지 않아야 함 → not_found
         ("잠깐", "아무개", "wait", ago(5), 20_000),
+        # 제목에 기간·차단 단어가 들어간 곡: 오분류 회귀 방지. 2년 전·1분이라 기존 통계 정답에 영향 없음
+        ("12월의 기적", "EXO", "miracle-dec", two_years_ago, 1 * MIN),
+        ("Raindrop", "테스트가수", "raindrop", two_years_ago, 1 * MIN),
+        ("오늘도", "테스트가수", "today-too", two_years_ago, 1 * MIN),
     ]
     b = [(LEAK_TITLE, "테스트가수", "secret", ago(1), 600 * MIN)]
     return a, b

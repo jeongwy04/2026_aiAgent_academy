@@ -4,6 +4,7 @@
 """
 import logging
 import re
+from collections.abc import Iterable
 from functools import lru_cache
 
 from app.ai.api_use.intent_list import SYSTEM_PROMPT, TOOL_METRIC, TOOLS, Intent
@@ -14,7 +15,10 @@ from app.utils import normalized
 logger = logging.getLogger(__name__)
 
 # Always rejected, before any classifier: modifications, third-party data, SQL markers.
-OUT_OF_SCOPE = re.compile(r"다른\s*(사용자|사람|회원)|타인|(전체|모든)\s*(사용자|회원)|삭제|수정|변경|업데이트|drop|insert|update|delete|;|--|/\*")
+OUT_OF_SCOPE = re.compile(
+    r"다른\s*(사용자|사람|회원)|타인|(전체|모든)\s*(사용자|회원)|삭제|수정|변경|업데이트"
+    r"|\b(?:drop|insert|update|delete)\b|;|--|/\*"  # \b: "Raindrop" is a title, not DROP
+)
 # Period/ranking questions: Text-to-SQL path only (fixed per-track SQL would ignore the period).
 STATS_HINT = re.compile(r"이번\s*달|지난\s*달|월별|기간별|가장|제일|랭킹|순위|오늘|어제|작년|올해|지난주|이번주|지난달|이번달|지난\s*주|이번\s*주|\d+\s*년|\d+\s*월|\d+\s*일|부터.*까지")
 
@@ -79,15 +83,28 @@ def llm_classify(question: str) -> tuple[Intent | None, str] | None:
     return metric, normalized(title)
 
 
-def classify_question(question: str) -> tuple[Intent | None, str]:
-    """(intent, title). intent가 None이면 지원하지 않는 질문입니다."""
-    q = normalized(question)
-    if OUT_OF_SCOPE.search(q):
+def mask_titles(q: str, titles: Iterable[str]) -> str:
+    """정규식 검사용으로만 본인 곡 제목을 지운다("12월의 기적"의 "12월", "오늘도"의 "오늘").
+    긴 제목부터 지워야 '봄날의 기억'이 '봄날'보다 먼저 빠진다. 1글자 제목은 문맥이 깨져 지우지 않는다.
+
+    사용자가 정한 제목으로 이 필터를 피할 수 있지만(제목이 "다른 사용자"인 곡 등), 이 정규식은
+    LLM 호출 전 사용성 필터일 뿐이다. 보안은 SQL 검증기·사용자 범위 강제·읽기 전용 계정·RLS가 맡는다."""
+    for title in sorted({normalized(t) for t in titles}, key=len, reverse=True):
+        if len(title) >= 2:
+            q = q.replace(title, " ")
+    return q
+
+
+def classify_question(question: str, known_titles: Iterable[str] = ()) -> tuple[Intent | None, str]:
+    """(intent, title). intent가 None이면 지원하지 않는 질문입니다.
+    known_titles: 질문에 들어 있는 본인 곡 제목. 정규식 검사에서만 지우고 LLM에는 원래 질문을 보냅니다."""
+    guard = mask_titles(normalized(question), known_titles)
+    if OUT_OF_SCOPE.search(guard):
         return None, ""
     result = llm_classify(question)
     if result is None:  # No LLM: fixed metrics only; period questions can't be answered safely.
-        return (None, "") if STATS_HINT.search(q) else (classify(question), extract_title(question))
+        return (None, "") if STATS_HINT.search(guard) else (classify(question), extract_title(question))
     intent, title = result
-    if intent in ("first", "total", "both") and STATS_HINT.search(q):
+    if intent in ("first", "total", "both") and STATS_HINT.search(guard):
         return "stats", ""  # e.g. "지난달 입춘 얼마나": an all-time answer would be wrong.
     return intent, title

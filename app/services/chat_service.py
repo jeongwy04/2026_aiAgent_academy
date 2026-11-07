@@ -1,7 +1,8 @@
 """챗봇 흐름: 질문 분류 → (곡별 지표) 곡 확정 → 고정 SQL / (자유 통계) Text-to-SQL → 응답 생성."""
+import re
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from app.ai.api_use.chat_classify import classify_question
@@ -13,10 +14,32 @@ from app.config import get_settings
 from app.models import Track, ListenEvent
 from app.schemas import ChatInput, ChatOut, TrackOut
 from app.services.track_service import owned_track
+from app.utils import normalized
 
 UNSUPPORTED = ("본인 청취 기록만 조회할 수 있습니다. 곡별 최초 기록일·총 재생 시간(예: '입춘 언제부터 들었어?')이나 "
                "'이번 달 가장 많이 들은 곡', '월별 청취 시간' 같은 통계를 질문해 주세요.")
-UNSPECIFIED_TITLES = ("이 노래", "이 곡", "그 노래", "그 곡", "", "내", "제")
+# "이 노래", "이노래", "이 노래를", "그 곡은", "저 노래", "이 노래 제"(README 예시), "이 곡 내"
+DEICTIC = re.compile(r"(?:이|그|저)\s*(?:노래|곡)(?:을|를|은|는|이|가|의)?(?:\s*(?:내|제|나의))?")
+
+
+def is_unspecified(title: str) -> bool:
+    """제목 전체가 '이 노래' 같은 지시어일 때만 True. '이 노래가 좋아' 같은 실제 제목은 False."""
+    t = normalized(title)
+    return t in ("", "내", "제") or DEICTIC.fullmatch(t) is not None
+
+
+def titles_in_question(session: Session, user_id: UUID, question: str) -> list[str]:
+    """질문 안에 들어 있는 본인 곡 제목(2글자 이상). 분류 정규식 검사에서 지우는 용도.
+    ReadSession(읽기 전용 + RLS)에서 호출하므로 본인 곡만 조회됩니다."""
+    found = session.scalars(
+        select(Track.title).where(
+            Track.user_id == user_id,
+            func.length(Track.title) >= 2,
+            literal(question.lower()).contains(func.lower(Track.title)),  # :q LIKE '%' || lower(title) || '%'
+        ).distinct().limit(20)
+    ).all()
+    q = normalized(question)
+    return [t for t in found if normalized(t) in q]  # 제목 속 %·_ 와일드카드로 잘못 걸린 경우를 제외
 
 
 def find_candidates(session: Session, user_id: UUID, title: str) -> list[Track]:
@@ -33,7 +56,7 @@ def find_candidates(session: Session, user_id: UUID, title: str) -> list[Track]:
 
 
 def answer_question(session: Session, user_id: UUID, request: ChatInput) -> ChatOut:
-    metric, title = classify_question(request.question)
+    metric, title = classify_question(request.question, titles_in_question(session, user_id, request.question))
     if metric is None:
         return ChatOut(question=request.question, status="unsupported", answer=UNSUPPORTED)
     if metric == "stats":
@@ -55,7 +78,7 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
     if request.track_id:
         track = owned_track(session, user_id, request.track_id)
     else:
-        if title in UNSPECIFIED_TITLES:
+        if is_unspecified(title):
             return ChatOut(question=request.question, status="needs_track", metric=metric, answer="조회할 곡을 선택하거나 곡명을 알려 주세요.")
         candidates = find_candidates(session, user_id, title)
         if not candidates:
