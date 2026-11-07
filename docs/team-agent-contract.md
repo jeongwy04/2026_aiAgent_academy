@@ -30,7 +30,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 ### 공통
 
 - 기본 로컬 API 주소는 `http://localhost:8000`이다. Android Emulator에서 개발 PC의 API에 접근할 때는 환경별 주소 설정을 사용한다(일반 Emulator에서는 `10.0.2.2`가 호스트를 가리킨다). 실기기는 같은 네트워크의 개발 PC 주소를 사용한다. 주소를 코드에 고정하지 않는다.
-- 앱의 기본 서버 주소는 USB 실기기용 `http://127.0.0.1:8000`이다. PC에서 `adb reverse tcp:8000 tcp:8000`을 실행해야 연결된다. Emulator는 앱에서 주소를 `http://10.0.2.2:8000`으로 바꾼다. 이미 로그인한 기기는 저장된 주소를 유지한다.
+- 앱에는 서버 주소 입력란이 없고, 서버 주소는 `SessionStore.DEFAULT_BASE_URL`(현재 ngrok 개발 주소 `https://state-gilled-spleen.ngrok-free.dev`)로 고정한다. 주소가 바뀌면 이 상수를 고쳐 다시 빌드한다. 로그아웃하거나 로그인이 만료되면 다음 로그인부터 이 주소를 쓴다.
 - 서버는 기본적으로 개발 PC 안(`127.0.0.1`)에서만 열린다. Emulator(`10.0.2.2`)는 그대로 접속되지만, 실기기 테스트 때는 서버를 `API_BIND=0.0.0.0 docker compose up -d`(직접 실행 시 `uvicorn ... --host 0.0.0.0`)로 띄운다.
 - Android 9 이상은 `http://` 평문 통신을 기본 차단한다. **디버그 빌드에서만** `network_security_config`로 개발 서버 주소(`10.0.2.2`, 개발 PC IP)의 평문 HTTP를 허용하고, 릴리스 빌드는 HTTPS만 사용한다. `usesCleartextTraffic=true`를 앱 전체에 켜지 않는다.
 - API 문서와 실행 가능한 계약은 `GET /docs` 및 `docs/openapi.json`에서 확인한다. 앱의 API 기본 경로는 `/api/v1`이다.

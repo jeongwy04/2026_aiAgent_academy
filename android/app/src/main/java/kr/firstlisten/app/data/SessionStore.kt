@@ -67,7 +67,7 @@ class SessionStore(context: Context) : AccountProvider {
     }
 
     @Synchronized
-    fun signOut() { update(SessionState(baseUrl = mutable.value.baseUrl)) }
+    fun signOut() { update(emptyState()) }
 
     @Synchronized
     override fun requireLogin(account: SyncAccount) {
@@ -104,7 +104,8 @@ class SessionStore(context: Context) : AccountProvider {
     }
 
     companion object {
-        const val DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+        // ponytail: fixed dev server (ngrok). Move to a BuildConfig field when release/dev servers differ.
+        const val DEFAULT_BASE_URL = "https://state-gilled-spleen.ngrok-free.dev"
         private const val KEY_ALIAS = "firstlisten-session-v1"
     }
 }
