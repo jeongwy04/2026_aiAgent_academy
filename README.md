@@ -46,6 +46,16 @@ uvicorn app.main:app --reload
 
 직접 실행한 서버도 기본은 이 PC에서만 접속됩니다. Android 실기기에서 접속하려면 `uvicorn app.main:app --reload --host 0.0.0.0`으로 실행해 주세요.
 
+Windows PowerShell에서는 가상환경의 Python을 직접 지정하면 전역 Python과 패키지가 섞이거나 활성화 스크립트 실행 정책에 막히는 일을 피할 수 있습니다.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e '.[test]'
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --reload-dir app --port 8001
+```
+
+위 명령은 기존 Docker API의 8000 포트와 겹치지 않도록 8001을 사용합니다. Docker API가 이미 실행 중이면 휴대폰 연결을 위해 Python 서버를 추가로 실행할 필요가 없습니다. USB 실기기는 `adb reverse tcp:8000 tcp:8000` 설정 후 앱 서버 주소로 `http://127.0.0.1:8000`을 사용합니다. Windows용 시간대 데이터 `tzdata`는 프로젝트 설치 시 함께 설치됩니다.
+
 애플리케이션은 시작할 때 테이블과 실행 계정의 권한을 확인합니다. PostgreSQL이 준비되지 않았거나 실행 계정이 테이블 소유자·관리자이거나 RLS가 꺼져 있으면 시작을 거부합니다. SQLite는 단위 테스트용이며 서버 실행용으로 지원하지 않습니다.
 
 ## 구현된 API

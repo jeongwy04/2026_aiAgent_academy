@@ -21,6 +21,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 @Serializable
 data class SessionState(
+    // Older encrypted sessions omit this field when it equals the original emulator URL.
+    // Preserve that decoding default; fresh installs use SessionStore.DEFAULT_BASE_URL below.
     val baseUrl: String = "http://10.0.2.2:8000",
     val memberId: String? = null,
     val email: String? = null,
@@ -82,13 +84,15 @@ class SessionStore(context: Context) : AccountProvider {
     }
 
     private fun read(): SessionState = runCatching {
-        val encoded = prefs.getString("payload", null) ?: return SessionState()
+        val encoded = prefs.getString("payload", null) ?: return emptyState()
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
         }
         json.decodeFromString<SessionState>(String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8))
-    }.getOrElse { SessionState() }
+    }.getOrElse { emptyState() }
+
+    private fun emptyState() = SessionState(baseUrl = DEFAULT_BASE_URL)
 
     private fun key(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -99,5 +103,8 @@ class SessionStore(context: Context) : AccountProvider {
         }.generateKey()
     }
 
-    companion object { private const val KEY_ALIAS = "firstlisten-session-v1" }
+    companion object {
+        const val DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+        private const val KEY_ALIAS = "firstlisten-session-v1"
+    }
 }

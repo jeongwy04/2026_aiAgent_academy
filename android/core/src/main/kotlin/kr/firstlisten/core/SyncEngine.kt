@@ -4,7 +4,7 @@ import java.io.IOException
 
 data class SyncAccount(val ownerKey: String, val baseUrl: String, val token: String, val sessionId: String)
 data class SyncAck(val eventId: String, val status: String, val trackId: String?, val listenedMs: Long?)
-class HttpFailure(val code: Int, message: String) : IOException(message)
+class HttpFailure(val code: Int, message: String, val retryAfterSec: Long? = null) : IOException(message)
 
 interface AccountProvider {
     fun currentAccount(): SyncAccount?

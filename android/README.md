@@ -13,6 +13,14 @@ YouTube Music의 미디어 세션을 관찰해 청취 시간을 기기에 저장
 
 서버 주소:
 
+앱의 초기 서버 주소는 USB 실기기용 `http://127.0.0.1:8000`입니다. USB로 연결한 뒤 아래 명령을 실행하면 휴대폰의 8000 포트를 PC 서버에 연결합니다. USB를 분리하거나 휴대폰을 재부팅한 후에는 다시 설정해야 할 수 있습니다.
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" -d reverse tcp:8000 tcp:8000
+```
+
+에뮬레이터에서 USB 포트 연결 설정 없이 PC 서버를 사용하려면 주소를 `http://10.0.2.2:8000`으로 바꿉니다. 기존에 로그인한 서버 주소는 유지됩니다.
+
 | 환경 | 주소 |
 | --- | --- |
 | Android Emulator → 개발 PC | `http://10.0.2.2:8000` |
