@@ -242,6 +242,8 @@ WHERE user_id = :authenticated_user_id
 
 Android 수집기와 최소 권한·조회 화면은 필수입니다. 별도 웹 프론트엔드는 후순위로 둡니다.
 
+3인 팀의 AI 에이전트 역할 분담, 공통 프롬프트, Android-백엔드 API 호출 계약은 [팀·AI 에이전트 호출 규약](docs/team-agent-contract.md)을 참고하세요.
+
 ## 고도화
 
 - **대화 문맥**: 직전 대화에서 선택한 곡을 기억해 “그 노래 총 몇 시간 들었어?” 처리
