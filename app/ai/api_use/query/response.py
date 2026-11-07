@@ -1,4 +1,4 @@
-"""조회 결과를 한국어 응답 문장으로 만듭니다. (DB 결과는 LLM에 보내지 않고 템플릿으로 생성)"""
+"""조회 결과를 한국어 응답 문장으로 만듭니다. 기본은 템플릿이며, CHAT_LLM_SUMMARY=true이면 summary.py에서 LLM 요약(가드레일 통과 시)."""
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -76,7 +76,7 @@ def _track(row: dict) -> str:
 
 def _rest(row: dict, keys: list[str], skip: str | None = None) -> str:
     """곡·기간 열을 뺀 나머지: "재생 시간 2시간 3분, 청취 횟수 14회"."""
-    return ", ".join(f"{label(k)} {value(k, row[k])}" for k in keys if k not in ("title", "artist", skip))
+    return ", ".join(f"{label(k)} {value(k, row[k])}" for k in keys if k not in ("title", "artist", "rank", skip))
 
 
 def _unknown_note(rows: list[dict]) -> str:
@@ -108,7 +108,8 @@ def format_rows(rows: list[dict], question: str = "") -> str:
         lines = []
         for i, row in enumerate(rows, 1):
             rest = _rest(row, keys)
-            lines.append(f"{i}. {_track(row)}{f' — {rest}' if rest else ''}")
+            number = int(row["rank"]) if isinstance(row.get("rank"), NUMBER) else i  # RANK() ties: 1, 1, 3
+            lines.append(f"{number}. {_track(row)}{f' — {rest}' if rest else ''}")
         return "\n".join(lines) + note
 
     # ③ 시간 흐름: month/week/day/hour/weekday 열 + 값

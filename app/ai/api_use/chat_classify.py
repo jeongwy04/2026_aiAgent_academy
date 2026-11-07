@@ -45,10 +45,11 @@ def extract_title(question: str) -> str:
 
 
 @lru_cache
-def chat_model(api_key: str, model: str, base_url: str):
+def chat_model(api_key: str, model: str, base_url: str, timeout: float = 10, max_retries: int = 1):
     from langchain_openai import ChatOpenAI  # optional at import time: missing package = regex fallback
 
-    return ChatOpenAI(model=model, api_key=api_key, base_url=base_url, temperature=0, timeout=10, max_retries=1)
+    return ChatOpenAI(model=model, api_key=api_key, base_url=base_url, temperature=0,
+                      timeout=timeout, max_retries=max_retries)
 
 
 @lru_cache

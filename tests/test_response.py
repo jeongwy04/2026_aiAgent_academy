@@ -52,3 +52,10 @@ def test_value_formats():
     # aware timestamps are shown in Asia/Seoul
     assert value("first_at", datetime(2026, 1, 1, 16, tzinfo=timezone.utc)) == "2026년 1월 2일"
     assert value("hour", 13) == "13시" and value("weekday", 7) == "일요일"
+
+
+def test_rank_column_is_not_repeated():
+    ranked = [{"rank": 1, "title": "입춘", "total_ms": 780_000}, {"rank": 1, "title": "봄", "total_ms": 780_000},
+              {"rank": 3, "title": "밤", "total_ms": 60_000}]
+    assert format_rows(ranked) == "1. 입춘 — 재생 시간 13분\n1. 봄 — 재생 시간 13분\n3. 밤 — 재생 시간 1분"  # RANK() ties kept
+    assert format_rows(ranked[:1]) == "입춘입니다. (재생 시간 13분)"
