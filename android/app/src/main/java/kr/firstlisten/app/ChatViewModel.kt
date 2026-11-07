@@ -24,6 +24,13 @@ import kr.firstlisten.core.SyncAccount
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * "이 노래", "그 곡은", "저 노래"처럼 곡을 가리키는 말로 시작하는 질문 (서버 chat_service.DEICTIC과 같은 기준).
+ * 대화 중인 곡(selectedTrack)은 이런 질문에만 track_id로 보낸다. 서버는 track_id가 있으면 질문 속 곡명을
+ * 무시하므로, "봄날 언제부터?" 같은 다른 곡 질문에 직전 곡을 붙이면 엉뚱한 곡의 답이 나온다.
+ */
+private val DEICTIC = Regex("""^\s*(이|그|저)\s*(노래|곡)""")
+
 data class ChatMessage(
     val id: String,
     val question: String,
@@ -88,7 +95,7 @@ class ChatViewModel internal constructor(
 
     fun send() { ask(mutable.value.question) }
 
-    fun ask(question: String) {
+    fun ask(question: String, trackOverride: TrackOut? = null) {
         val before = mutable.value
         if (before.sending || before.retryAfterSec > 0) return
         val owner = accounts.currentAccount()
@@ -101,14 +108,15 @@ class ChatViewModel internal constructor(
             mutable.update { it.copy(error = "질문을 입력해 주세요.") }
             return
         }
-        val context = before.selectedTrack
+        // 직접 고른 후보가 있으면 그 곡, 아니면 '이/그 노래'로 시작하는 질문에만 대화 중인 곡을 붙인다.
+        val target = trackOverride ?: before.selectedTrack?.takeIf { DEICTIC.containsMatchIn(text) }
         val messageId = UUID.randomUUID().toString()
         val version = requestVersion.incrementAndGet()
         mutable.update { it.copy(question = "", sending = true, error = null,
             messages = it.messages + ChatMessage(messageId, text, pending = true)) }
         requestJob = tasks.launch {
             try {
-                val reply = api.chat(owner, text, context?.id)
+                val reply = api.chat(owner, text, target?.id)
                 if (isCurrent(owner, version)) {
                     mutable.update { it.copy(sending = false, selectedTrack = reply.track ?: it.selectedTrack,
                         messages = it.messages.map { message -> if (message.id == messageId) message.copy(reply = reply, pending = false) else message }) }
@@ -140,7 +148,7 @@ class ChatViewModel internal constructor(
         val message = mutable.value.messages.firstOrNull { it.id == messageId } ?: return
         if (message.reply?.candidates?.none { it.id == track.id } != false) return
         selectTrack(track)
-        ask(message.question)
+        ask(message.question, track)  // 원래 질문은 곡명을 담고 있어 '이 노래' 규칙에 걸리지 않으므로 직접 넘긴다
     }
 
     private fun startCooldown(owner: SyncAccount, seconds: Long) {

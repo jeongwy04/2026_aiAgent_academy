@@ -30,6 +30,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 ### 공통
 
 - 기본 로컬 API 주소는 `http://localhost:8000`이다. Android Emulator에서 개발 PC의 API에 접근할 때는 환경별 주소 설정을 사용한다(일반 Emulator에서는 `10.0.2.2`가 호스트를 가리킨다). 실기기는 같은 네트워크의 개발 PC 주소를 사용한다. 주소를 코드에 고정하지 않는다.
+- 앱의 기본 서버 주소는 USB 실기기용 `http://127.0.0.1:8000`이다. PC에서 `adb reverse tcp:8000 tcp:8000`을 실행해야 연결된다. Emulator는 앱에서 주소를 `http://10.0.2.2:8000`으로 바꾼다. 이미 로그인한 기기는 저장된 주소를 유지한다.
 - 서버는 기본적으로 개발 PC 안(`127.0.0.1`)에서만 열린다. Emulator(`10.0.2.2`)는 그대로 접속되지만, 실기기 테스트 때는 서버를 `API_BIND=0.0.0.0 docker compose up -d`(직접 실행 시 `uvicorn ... --host 0.0.0.0`)로 띄운다.
 - Android 9 이상은 `http://` 평문 통신을 기본 차단한다. **디버그 빌드에서만** `network_security_config`로 개발 서버 주소(`10.0.2.2`, 개발 PC IP)의 평문 HTTP를 허용하고, 릴리스 빌드는 HTTPS만 사용한다. `usesCleartextTraffic=true`를 앱 전체에 켜지 않는다.
 - API 문서와 실행 가능한 계약은 `GET /docs` 및 `docs/openapi.json`에서 확인한다. 앱의 API 기본 경로는 `/api/v1`이다.
@@ -130,6 +131,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 **결과 표시 방법**
 
+- 앱은 직전에 답한 곡(또는 사용자가 고른 곡)을 "대화 중인 곡"으로 기억하되, 질문이 "이/그/저 노래·곡"으로 시작할 때와 `ambiguous` 후보를 선택했을 때만 `track_id`를 보낸다. 서버는 `track_id`가 있으면 질문 속 곡명을 무시하므로, 다른 곡명을 쓴 질문에 이전 곡을 붙이지 않는다.
 - 모든 상태에서 `answer`는 서버가 만든 한국어 문장이다. 기본으로 이 문장을 그대로 표시한다.
 - `metric`이 `first`/`total`/`both`이면 `first_recorded_at`(UTC, 표시할 때 `Asia/Seoul`로 변환)과 `total_listened_ms`(밀리초)를 구조화된 값으로 함께 쓸 수 있다.
 - `metric`이 `total`/`both`여도 Takeout 기록만 있는 곡은 `total_listened_ms`가 null일 수 있다. 이때 `answer`가 "재생 시간을 알 수 없어 총 시간을 계산할 수 없습니다"를 포함한다.

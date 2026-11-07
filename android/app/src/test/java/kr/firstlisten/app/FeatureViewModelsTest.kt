@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kr.firstlisten.app.network.FirstListenApi
@@ -183,5 +184,36 @@ class FeatureViewModelsTest {
         vm.await { !it.sending && it.messages.lastOrNull()?.reply != null }
         assertEquals(1, server.requestCount)
         assertEquals(1, vm.state.value.messages.size)
+    }
+
+    @Test fun `answered track is reused only for deictic questions`() = runBlocking {
+        val vm = chat()
+        fun body() = Json.parseToJsonElement(server.takeRequest(3, TimeUnit.SECONDS)!!.body.readUtf8()).jsonObject
+
+        server.enqueue(MockResponse().setBody(answer(trackId = "ipchun")))
+        vm.ask("입춘 언제부터 들었어?")
+        vm.await { it.messages.size == 1 && !it.sending }
+        body()
+        assertEquals("ipchun", vm.state.value.selectedTrack!!.id)  // 대화 중인 곡으로 기억
+
+        // 다른 곡명을 쓴 질문: 직전 곡을 붙이면 서버가 곡명을 무시하므로 붙이지 않는다
+        server.enqueue(MockResponse().setBody(answer(trackId = "spring")))
+        vm.ask("봄날 언제부터 들었어?")
+        vm.await { it.messages.size == 2 && !it.sending }
+        val other = body()
+        assertTrue(other["track_id"] == null || other["track_id"] is JsonNull)
+
+        // '그 노래': 직전에 답한 곡(spring)을 붙인다
+        server.enqueue(MockResponse().setBody(answer(trackId = "spring")))
+        vm.ask("그 노래 총 몇 시간 들었어?")
+        vm.await { it.messages.size == 3 && !it.sending }
+        assertEquals("spring", body().getValue("track_id").jsonPrimitive.content)
+
+        // 통계 질문에도 붙이지 않는다
+        server.enqueue(MockResponse().setBody("""{"question":"q","answer":"a","status":"answered","metric":"stats"}"""))
+        vm.ask("이번 달 가장 많이 들은 곡은?")
+        vm.await { it.messages.size == 4 && !it.sending }
+        val stats = body()
+        assertTrue(stats["track_id"] == null || stats["track_id"] is JsonNull)
     }
 }
