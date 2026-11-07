@@ -86,9 +86,14 @@ uvicorn app.main:app --reload
 
 `{"question":"입춘 언제부터 들었어?"}`처럼 곡명만 보내도 됩니다. 제목이 일치하는 곡을 우선 찾고, 없으면 제목 부분 검색을 사용합니다. 여러 후보이면 `ambiguous`와 최대 20개 `candidates`를 반환하며 `track_id`를 선택하기 전에는 집계하지 않습니다. `이 노래`에 곡 ID가 없으면 `needs_track`, 기록이 없으면 `not_found`, 지원하지 않는 질문은 `unsupported`를 반환합니다. 선택한 타 사용자 곡 ID는 `404`입니다.
 
-`PICKLE_API_KEY`가 설정되면 LangChain `ChatOpenAI(model="pickle-general", base_url="https://llm.pcl.kr/v1", temperature=0.3).bind_tools(...)`로 질문을 분류합니다. LLM은 `get_first_listen`, `get_total_listen_time`, `get_listen_summary` 중 하나를 고르고 `title` 인자로 곡명을 추출할 뿐이며, SQL은 생성하지 않습니다. 곡 찾기와 검증된 고정 SQL 실행은 기존과 같습니다. 기간·다른 사용자·수정 요청 등 범위 밖 질문은 LLM 호출 전에 규칙으로 거절합니다. 키가 없거나 호출이 실패하면 규칙 기반 분류(“언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간” 등)로 대체합니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
+`PICKLE_API_KEY`가 설정되면 LangChain `ChatOpenAI(model="pickle-general", base_url="https://llm.pcl.kr/v1", temperature=0.3).bind_tools(...)`로 질문을 분류합니다. 질문은 두 경로로 나뉩니다.
 
-SQLGlot AST를 서버의 허용된 집계·인증 필터와 대조하고 검증된 서버 SQL만 실행합니다. 이 검증기는 향후 LLM Tool Calling에도 재사용할 수 있습니다. 현재는 쿼리의 의미가 비슷해도 허용된 AST 형태가 아니면 거절하는 보수적인 정책입니다. 읽기 전용 계정·트랜잭션, 강제 RLS, 트랜잭션 로컬 사용자 컨텍스트, 2초 쿼리 제한을 함께 적용합니다. [SQLAlchemy의 원자적 upsert](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html#insert-on-conflict-upsert)와 [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)를 사용합니다.
+- **곡별 최초 기록일·총 재생 시간**: LLM이 `get_first_listen`, `get_total_listen_time`, `get_listen_summary` 중 하나를 고르고 `title` 인자로 곡명만 추출합니다. 곡 찾기 후 서버 고정 SQL을 실행합니다.
+- **자유 통계**(“이번 달 제일 많이 들은 곡”, “월별 청취 시간” 등): LLM이 `query_listening_stats`를 고르면 Text-to-SQL로 처리합니다. LLM이 SELECT를 작성하면 전용 검증기를 거쳐 실행하고, 검증·실행에 실패하면 오류를 알려 주고 최대 3번 다시 작성하게 합니다(self-healing). 결과는 `metric: "stats"`, 최대 50행의 `rows`로 반환하며, `_ms`로 끝나는 열은 응답 문장에서 시간으로 표시합니다. 3번 모두 실패하면 `unsupported`입니다. 기간·순위 표현이 있으면 LLM이 곡별 도구를 골라도 이 경로로 보냅니다(전체 기간 값을 잘못 답하지 않도록).
+
+다른 사용자·수정·삭제 요청과 SQL 기호는 LLM 호출 전에 규칙으로 거절합니다. 키가 없거나 호출이 실패하면 규칙 기반 분류(“언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간” 등)로 대체하며, 이때 자유 통계 질문은 `unsupported`입니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
+
+고정 SQL 경로는 SQLGlot AST를 서버의 허용된 집계·인증 필터와 대조하고 서버 SQL만 실행합니다. Text-to-SQL 경로는 별도 검증기(`app/ai/api_use/query/stats_validator.py`)를 사용합니다. SELECT 하나만, `listen_events`·`tracks` 테이블만, 허용 목록의 문법·함수(집계, 날짜 절단·추출, CASE, 순위 등)만 통과시키고 CTE·UNION·INTO·잠금·파라미터·알 수 없는 함수(`set_config`, `pg_sleep` 등)는 거절합니다. 통과한 SQL도 모든 테이블을 서버가 확정한 사용자 ID로 한정한 서브쿼리로 바꿔 실행하므로, LLM이 사용자 조건을 빠뜨리거나 조작해도 본인 기록만 조회합니다. 읽기 전용 계정·트랜잭션, 강제 RLS, 트랜잭션 로컬 사용자 컨텍스트, 2초 쿼리 제한을 함께 적용합니다. [SQLAlchemy의 원자적 upsert](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html#insert-on-conflict-upsert)와 [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)를 사용합니다.
 
 인증 요청은 IP당 분당 10회, 질문은 사용자당 분당 20회로 제한합니다. `429`의 `Retry-After` 이후 다시 요청해 주세요. 현재 제한기는 프로세스 메모리를 사용하므로 다중 워커·다중 인스턴스 운영 전에는 공유 저장소 기반 제한기로 교체해야 합니다. 운영 배포 시 HTTPS와 신뢰할 프록시 설정이 필요합니다.
 

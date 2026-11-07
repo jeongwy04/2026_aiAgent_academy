@@ -19,6 +19,17 @@ def format_duration(ms: int) -> str:
     return " ".join(parts)
 
 
+def format_rows(rows: list[dict]) -> str:
+    """Text-to-SQL 결과를 한 행씩 문장으로. `_ms`로 끝나는 열은 시간으로 표시합니다."""
+    if not rows:
+        return "조건에 맞는 청취 기록이 없습니다."
+
+    def cell(key, value):
+        return format_duration(int(value)) if key.endswith("_ms") and value is not None else value
+
+    return "\n".join(", ".join(f"{key}: {cell(key, value)}" for key, value in row.items()) for row in rows)
+
+
 def build_answer(first: datetime | None, total: int | None) -> tuple[str, datetime | None, int | None]:
     """(answer, first_recorded_at(UTC 보정), total_listened_ms)"""
     sentences = []
