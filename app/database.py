@@ -32,6 +32,8 @@ def set_user_context(session: Session, user_id: str, *, readonly: bool = False) 
         if readonly:
             session.execute(text("SET TRANSACTION READ ONLY"))
         session.execute(text("SELECT set_config('app.user_id', :id, true)"), {"id": user_id})
+        # Timestamps come back in UTC regardless of the server's TimeZone setting.
+        session.execute(text("SELECT set_config('TimeZone', 'UTC', true)"))
         session.execute(text("SELECT set_config('statement_timeout', :timeout, true)"),
                         {"timeout": str(get_settings().query_timeout_ms)})
 

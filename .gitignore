@@ -10,4 +10,5 @@ build/
 .test-results/
 .gradle-android/
 .android-build-tools/
+evals/results/
 

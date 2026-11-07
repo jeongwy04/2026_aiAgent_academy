@@ -17,6 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "httpx>=0.28,<1"]
+eval = ["httpx>=0.28,<1", "psycopg[binary]>=3.2,<4"]
+langsmith = ["langsmith>=0.3,<1"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

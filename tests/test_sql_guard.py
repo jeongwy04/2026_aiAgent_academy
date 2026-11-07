@@ -59,6 +59,9 @@ def test_stats_sql_is_scoped_to_user():
     assert safe.count(f"user_id = CAST('{STATS_USER}' AS UUID)") == 2
     # A model-written filter for another user is kept but can only narrow the scoped subquery.
     other = guard_stats_sql("SELECT COUNT(*) FROM tracks WHERE user_id <> user_id", STATS_USER)
+    assert guard_stats_sql("SELECT title FROM tracks", STATS_USER).endswith("LIMIT 50")
+    assert guard_stats_sql("SELECT title FROM tracks LIMIT 1000", STATS_USER).endswith("LIMIT 50")
+    assert guard_stats_sql("SELECT title FROM tracks LIMIT 5", STATS_USER).endswith("LIMIT 5")
     assert f"(SELECT * FROM tracks WHERE user_id = CAST('{STATS_USER}' AS UUID)) AS tracks" in other
 
 
@@ -69,7 +72,7 @@ def test_stats_sql_is_scoped_to_user():
     "SELECT * INTO t2 FROM tracks", "SELECT * FROM tracks FOR UPDATE", "SELECT pg_sleep(5)",
     "SELECT set_config('app.user_id', 'x', true)", "SELECT current_setting('app.user_id')",
     "SELECT * FROM generate_series(1, 10)", "SELECT * FROM tracks WHERE user_id = :authenticated_user_id",
-    "SELECT * FROM tracks -- x", "SELECT * FROM tracks /* x */",
+    "SELECT * FROM tracks -- x", "SELECT * FROM tracks /* x */", "SELECT CURRENT_DATE",
 ])
 def test_stats_sql_rejects_unsafe(sql):
     from app.ai.api_use.query.stats_validator import guard_stats_sql

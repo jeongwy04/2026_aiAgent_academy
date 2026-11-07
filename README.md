@@ -27,6 +27,8 @@ docker compose up --build -d
 - OpenAPI 계약: [docs/openapi.json](docs/openapi.json)
 - 상태 확인: `GET /health`, DB 연결 확인: `GET /ready`
 - 종료: `docker compose down` (DB 볼륨은 보존됩니다.)
+- Android 연결: Emulator는 `http://10.0.2.2:8000`을 사용합니다. 실기기는 API가 기본적으로 이 PC(127.0.0.1)에만 열려 있으므로 `API_BIND=0.0.0.0 docker compose up -d`로 띄운 뒤 같은 Wi-Fi에서 `http://<개발 PC IP>:8000`으로 접속합니다. 외부에 공개되므로 개발 중에만 사용하고 방화벽에서 8000 포트 허용이 필요할 수 있습니다.
+- Windows에서 `docker/init-db.sh`가 CRLF로 체크아웃되면 DB 역할 생성이 `set: Illegal option -`로 실패합니다. `.gitattributes`가 `*.sh`를 LF로 고정하며, 이전에 실패한 볼륨은 `docker compose down -v`로 지운 뒤 다시 실행해야 초기화됩니다.
 
 기본 비밀번호는 로컬 개발용입니다. 설정을 변경하려면 `.env.example`을 `.env`로 복사한 뒤 수정해 주세요. Compose는 세 DB 비밀번호를 사용하고, Python을 직접 실행할 때는 URL 설정도 사용합니다. 비밀번호의 URL 예약 문자는 URL에서 인코딩해야 합니다. DB 초기화 스크립트는 빈 볼륨에서 한 번 실행되므로 기존 볼륨의 비밀번호는 `.env` 변경만으로 바뀌지 않습니다.
 
@@ -41,6 +43,8 @@ docker compose up -d --build db
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+직접 실행한 서버도 기본은 이 PC에서만 접속됩니다. Android 실기기에서 접속하려면 `uvicorn app.main:app --reload --host 0.0.0.0`으로 실행해 주세요.
 
 애플리케이션은 시작할 때 테이블과 실행 계정의 권한을 확인합니다. PostgreSQL이 준비되지 않았거나 실행 계정이 테이블 소유자·관리자이거나 RLS가 꺼져 있으면 시작을 거부합니다. SQLite는 단위 테스트용이며 서버 실행용으로 지원하지 않습니다.
 
@@ -90,16 +94,18 @@ uvicorn app.main:app --reload
 
 ### 질문 조회의 현재 범위
 
+응답 JSON은 요청 질문 `question`과 답변 `answer`를 맨 앞에 표시합니다. `status`, 곡 정보, 집계값 등 기존 상세 필드도 그대로 반환합니다.
+
 ```json
 {"question":"이 노래 총 재생 시간이 얼마야?","track_id":"서버에서 받은 UUID"}
 ```
 
 `{"question":"입춘 언제부터 들었어?"}`처럼 곡명만 보내도 됩니다. 제목이 일치하는 곡을 우선 찾고, 없으면 제목 부분 검색을 사용합니다. 여러 후보이면 `ambiguous`와 최대 20개 `candidates`를 반환하며 `track_id`를 선택하기 전에는 집계하지 않습니다. `이 노래`에 곡 ID가 없으면 `needs_track`, 기록이 없으면 `not_found`, 지원하지 않는 질문은 `unsupported`를 반환합니다. 선택한 타 사용자 곡 ID는 `404`입니다.
 
-`PICKLE_API_KEY`가 설정되면 LangChain `ChatOpenAI(model="pickle-general", base_url="https://llm.pcl.kr/v1", temperature=0.3).bind_tools(...)`로 질문을 분류합니다. 질문은 두 경로로 나뉩니다.
+`PICKLE_API_KEY`가 설정되면 LangChain `ChatOpenAI(model="pickle-general", base_url="https://llm.pcl.kr/v1", temperature=0).bind_tools(...)`로 질문을 분류합니다. 질문은 두 경로로 나뉩니다.
 
 - **곡별 최초 기록일·총 재생 시간**: LLM이 `get_first_listen`, `get_total_listen_time`, `get_listen_summary` 중 하나를 고르고 `title` 인자로 곡명만 추출합니다. 곡 찾기 후 서버 고정 SQL을 실행합니다.
-- **자유 통계**(“이번 달 제일 많이 들은 곡”, “월별 청취 시간” 등): LLM이 `query_listening_stats`를 고르면 Text-to-SQL로 처리합니다. LLM이 SELECT를 작성하면 전용 검증기를 거쳐 실행하고, 검증·실행에 실패하면 오류를 알려 주고 최대 3번 다시 작성하게 합니다(self-healing). 결과는 `metric: "stats"`, 최대 50행의 `rows`로 반환하며, `_ms`로 끝나는 열은 응답 문장에서 시간으로 표시합니다. 3번 모두 실패하면 `unsupported`입니다. 기간·순위 표현이 있으면 LLM이 곡별 도구를 골라도 이 경로로 보냅니다(전체 기간 값을 잘못 답하지 않도록).
+- **자유 통계**(“이번 달 제일 많이 들은 곡”, “월별 청취 시간” 등): LLM이 `query_listening_stats`를 고르면 Text-to-SQL로 처리합니다. LLM이 SELECT를 작성하면 전용 검증기를 거쳐 실행하고, 검증·실행에 실패하면 오류를 알려 주고 최대 3번 다시 작성하게 합니다(self-healing). 결과는 `metric: "stats"`, 최대 50행의 `rows`로 반환하며, `_ms`로 끝나는 열은 응답 문장에서 시간으로 표시합니다. 3번 모두 실패하면 `unsupported`입니다. “오늘·이번 달” 같은 기준 시점은 항상 DB의 `now() AT TIME ZONE 'Asia/Seoul'`로 계산하며(`CURRENT_DATE`는 검증기에서 거절), 생성 SQL은 사용자에게 보이지 않고 서버 로그에 남습니다. `CHAT_DEBUG=true`일 때만 응답 `debug.sql_attempts`에 시도별 SQL·오류를 포함합니다(평가·개발 전용). 기간·순위 표현이 있으면 LLM이 곡별 도구를 골라도 이 경로로 보냅니다(전체 기간 값을 잘못 답하지 않도록).
 
 다른 사용자·수정·삭제 요청과 SQL 기호는 LLM 호출 전에 규칙으로 거절합니다. 키가 없거나 호출이 실패하면 규칙 기반 분류(“언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간” 등)로 대체하며, 이때 자유 통계 질문은 `unsupported`입니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
 
@@ -125,6 +131,19 @@ postman collection run postman/collections/firstlisten --no-report-events
 # FastAPI 변경 후 저장된 OpenAPI 계약 갱신
 python scripts/export_openapi.py
 ```
+
+### 챗봇 평가 (실제 LLM)
+
+`evals/`는 실제 Pickle LLM을 호출해 30개 질문(곡별 지표·다른 표현·곡 확정·자유 통계·거절·공격성)을 채점합니다. 비용이 들어 기본 `pytest`에는 넣지 않고, 프롬프트나 검증기를 바꿨을 때 따로 실행합니다.
+
+```bash
+# .env: PICKLE_API_KEY=..., CHAT_REQUESTS_PER_MINUTE=200, CHAT_DEBUG=true
+docker compose up --build -d
+pip install -e '.[eval]'
+python -m evals.run_eval --runs 3            # 일부만: --only stats,first-01
+```
+
+평가 회원 A·B를 매번 새로 만들고 API로 기록을 넣은 뒤(`evals/seed.py`), 질문마다 `/api/v1/chat`을 N번 호출합니다. 정답은 `evals/dataset.jsonl`의 기준 SQL을 읽기 전용 계정·RLS로 실행해 매번 계산합니다. 경로(status·metric), 값(열 이름 무시), 회원 B 데이터 유출 없음을 모두 만족해야 합격입니다. 응답 시간은 합격 판정과 분리해 평균과 10초 초과 건수로만 표시합니다(통계 질문은 LLM을 2~4번 부릅니다). 카테고리별 pass@1(평균 정확도)·pass^N(N번 모두 합격한 질문 비율)·평균 SQL 시도와 실패한 질문의 생성 SQL을 출력합니다. 결과는 `evals/results/<시각>.json`에 저장되므로 프롬프트 수정 전후를 비교할 수 있습니다. 채점기 자체는 `tests/test_evals.py`에서 검증합니다. 개발 DB에서만 실행해 주세요.
 
 PostgreSQL 테스트와 Postman은 임의 이메일의 테스트 회원·기록을 생성하므로 개발 전용 DB에서 실행해 주세요. Postman은 기본 `http://127.0.0.1:8000`을 사용하며 다른 주소는 `--env-var base_url=http://...`으로 지정할 수 있습니다. CLI 없이 Postman 앱을 사용하려면 [OpenAPI 계약](docs/openapi.json)을 가져올 수 있습니다.
 
@@ -237,6 +256,8 @@ WHERE user_id = :authenticated_user_id
 같은 이벤트를 31초 → 120초 → 31초로 전송해도 이벤트는 한 개, 총 시간은 120초로 유지되어야 합니다. 자연어 조회 결과는 기준 SQL의 집계값과 비교합니다.
 
 Android 수집기와 최소 권한·조회 화면은 `android/`에 구현되어 있습니다. 실제 기기에서 YouTube Music의 메타데이터·재생 상태 제공과 백그라운드 수집을 확인해야 합니다. 별도 웹 프론트엔드는 후순위로 둡니다.
+
+3인 팀의 AI 에이전트 역할 분담, 공통 프롬프트, Android-백엔드 API 호출 계약은 [팀·AI 에이전트 호출 규약](docs/team-agent-contract.md)을 참고하세요.
 
 ## 고도화
 

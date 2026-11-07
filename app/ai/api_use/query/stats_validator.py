@@ -13,6 +13,7 @@ from sqlglot.errors import SqlglotError
 
 from app.ai.api_use.query.validator import UnsafeSQL
 
+MAX_ROWS = 50
 ALLOWED_TABLES = {"listen_events", "tracks"}
 # Node whitelist: anything else (CTE, UNION, INTO, FOR UPDATE, placeholders,
 # unknown functions such as set_config/pg_sleep, other schemas...) is rejected.
@@ -26,7 +27,8 @@ ALLOWED_NODES = (
     exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod, exp.Neg,
     exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Coalesce, exp.Cast, exp.Round, exp.Floor,
     exp.Lower, exp.Upper, exp.Extract, exp.TimestampTrunc, exp.DateTrunc, exp.TimeToStr,
-    exp.Case, exp.If, exp.CurrentDate, exp.CurrentTimestamp, exp.Rank, exp.DenseRank, exp.RowNumber,
+    exp.Case, exp.If, exp.CurrentTimestamp,  # CURRENT_DATE: session-TZ dependent, use now() AT TIME ZONE
+    exp.Rank, exp.DenseRank, exp.RowNumber,
 )
 SQLGLOT_DIALECT = {"postgresql": "postgres", "sqlite": "sqlite"}
 
@@ -57,4 +59,9 @@ def guard_stats_sql(sql: str, user_id: UUID, dialect: str = "postgresql") -> str
     for table in list(tree.find_all(exp.Table)):
         scoped = exp.select("*").from_(table.name).where(exp.column("user_id").eq(user)).subquery(table.alias_or_name)
         table.replace(scoped)
+    # Outer LIMIT: missing, non-literal or above MAX_ROWS is overwritten with MAX_ROWS.
+    limit = tree.args.get("limit")
+    value = limit.expression if limit else None
+    if not (isinstance(value, exp.Literal) and value.is_int and int(value.name) <= MAX_ROWS):
+        tree.limit(MAX_ROWS, copy=False)
     return tree.sql(dialect=SQLGLOT_DIALECT.get(dialect, "postgres"))
