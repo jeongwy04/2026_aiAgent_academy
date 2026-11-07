@@ -15,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
+import java.io.File
 
 class FirstListenApiTest {
     private val server = MockWebServer().apply { start() }
@@ -127,5 +128,43 @@ class FirstListenApiTest {
         server.enqueue(MockResponse().setResponseCode(429).addHeader("Retry-After", "invalid"))
         try { api.chat(account, "질문", null); fail("must be rate limited") }
         catch (error: HttpFailure) { assertNull(error.retryAfterSec) }
+    }
+
+    @Test fun `Takeout uploads an authenticated multipart JSON file and parses the import contract`() = runBlocking {
+        val file = File.createTempFile("takeout-test-", ".json")
+        try {
+            val payload = """[{"title":"입춘 노래를 들었습니다.","time":"2020-01-01T00:00:00Z"}]"""
+            file.writeText(payload)
+            server.enqueue(MockResponse().setBody("""{"job_id":"job-1","status":"completed","parser_version":"1","json_sha256":"hash","total":10,"accepted":6,"inserted":4,"duplicates":2,"excluded":2,"review":1,"errors":1,"new_tracks":3,"distinct_tracks":4,"reasons":{}}"""))
+            val result = api.importTakeout(account, file)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/v1/imports", request.path)
+            assertEquals("Bearer secret-token", request.getHeader("Authorization"))
+            assertTrue(request.getHeader("Content-Type")!!.startsWith("multipart/form-data; boundary="))
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("name=\"file\"; filename=\"takeout.json\""))
+            assertTrue(body.contains("Content-Type: application/json"))
+            assertTrue(body.contains(payload))
+            assertEquals("completed", result.status)
+            assertEquals(4, result.inserted)
+            assertEquals(2, result.duplicates)
+            assertEquals(1, result.review)
+            assertEquals(1, result.errors)
+        } finally { file.delete() }
+    }
+
+    @Test fun `Takeout redirects and size failures retain the upload error status`() = runBlocking {
+        val file = File.createTempFile("takeout-test-", ".json").apply { writeText("[]") }
+        val other = MockWebServer().apply { start() }
+        try {
+            server.enqueue(MockResponse().setResponseCode(307).addHeader("Location", other.url("/steal")))
+            try { api.importTakeout(account, file); fail("must reject redirect") }
+            catch (error: HttpFailure) { assertEquals(307, error.code) }
+            assertEquals(0, other.requestCount)
+            server.enqueue(MockResponse().setResponseCode(413).setBody("""{"detail":"파일 크기 초과"}"""))
+            try { api.importTakeout(account, file); fail("must reject oversized upload") }
+            catch (error: HttpFailure) { assertEquals(413, error.code) }
+        } finally { file.delete(); other.shutdown() }
     }
 }

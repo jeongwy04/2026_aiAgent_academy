@@ -17,10 +17,13 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -62,6 +65,20 @@ import kotlin.coroutines.resumeWithException
 @Serializable private data class SyncBody(val events: List<EventDto>)
 @Serializable private data class AckDto(val event_id: String, val status: String, val track_id: String? = null, val listened_ms: Long? = null)
 @Serializable private data class SyncResponse(val results: List<AckDto>)
+
+@Serializable data class ImportSummary(
+    val job_id: String,
+    val status: String,
+    val total: Int,
+    val accepted: Int,
+    val inserted: Int,
+    val duplicates: Int,
+    val excluded: Int,
+    val review: Int,
+    val errors: Int,
+    val new_tracks: Int,
+    val distinct_tracks: Int,
+)
 
 class FirstListenApi(
     private val allowHttp: Boolean,
@@ -105,6 +122,20 @@ class FirstListenApi(
         decode(request(account.baseUrl, "/api/v1/chat", account.token,
             json.encodeToString(ChatBody(question.trim().take(500), trackId))))
 
+    suspend fun importTakeout(account: SyncAccount, file: File): ImportSummary {
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file", "takeout.json", file.asRequestBody("application/json".toMediaType()))
+            .build()
+        val request = Request.Builder().url(normalizeBaseUrl(account.baseUrl) + "/api/v1/imports")
+            .header("Accept", "application/json")
+            .header("Authorization", "Bearer ${account.token}").post(body).build()
+        // Large histories are parsed and committed before the server responds.
+        val uploadClient = client.newBuilder().writeTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS).callTimeout(300, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false).build()
+        return decode(execute(request, uploadClient))
+    }
+
     override suspend fun send(account: SyncAccount, events: List<ListenSnapshot>): List<SyncAck> {
         require(events.size in 1..100 && events.all { it.ownerKey == account.ownerKey })
         val body = SyncBody(events.map { EventDto(it.eventId,
@@ -125,7 +156,11 @@ class FirstListenApi(
         val builder = Request.Builder().url(url).header("Accept", "application/json")
         token?.let { builder.header("Authorization", "Bearer $it") }
         if (body != null) builder.post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        return client.newCall(builder.build()).await().use { response ->
+        return execute(builder.build())
+    }
+
+    private suspend fun execute(request: Request, transport: OkHttpClient = client): String =
+        transport.newCall(request).await().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val detail = runCatching {
@@ -138,7 +173,6 @@ class FirstListenApi(
             }
             text
         }
-    }
 
     private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
         continuation.invokeOnCancellation { cancel() }

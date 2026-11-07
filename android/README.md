@@ -40,6 +40,15 @@ $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 
 APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생성됩니다. Linux/macOS에서는 JDK 21과 Android SDK를 설정한 뒤 `sh gradlew`를 사용합니다. Gradle Wrapper와 의존성은 첫 실행 시 다운로드합니다.
 
+## Google Takeout JSON 가져오기
+
+로그인 후 **기록 → Google Takeout 가져오기 → JSON 파일 선택 및 가져오기**를 누릅니다. Google Takeout에서 내려받은 ZIP의 압축을 먼저 풀고 활동 기록 JSON 파일을 선택하세요. 파일을 선택하면 현재 계정으로 바로 업로드합니다. 알림 접근 권한은 필요하지 않습니다.
+
+- 최대 100 MiB이며, 파일 전체를 메모리에 올리지 않고 앱 캐시에 복사한 뒤 인증된 `POST /api/v1/imports`의 multipart `file`로 전송합니다. 임시 사본은 성공·실패·취소 시 삭제합니다.
+- 완료 화면에 새로 저장, 중복, 제외, 검토 필요, 오류 및 곡 수를 표시합니다. **내 곡에서 확인**을 누르면 목록을 새로 조회합니다. 가져온 기록의 재생 시간은 미확인이므로 시간 합계에서 제외합니다.
+- 업로드·서버 처리 중에는 앱을 열어 두세요. 화면 회전 중에는 작업을 유지하며, 로그아웃·계정 변경 시 작업과 결과를 초기화합니다. 백그라운드 가져오기 및 프로세스 종료 후 자동 재개는 지원하지 않습니다.
+- 연결이 끊겨 저장 결과를 확인하지 못했다면 같은 파일을 다시 선택할 수 있습니다. 서버는 기존 Takeout 기록을 중복 저장하지 않습니다. 검토 필요·오류 항목의 상세 조회 UI는 제공하지 않으며 해당 항목은 청취 기록에 추가되지 않습니다.
+
 ## 코드 구성
 
 | 파일 / 모듈 | 역할 |
@@ -50,7 +59,8 @@ APK는 `app/build/outputs/apk/debug/app-debug.apk`에 생성됩니다. Linux/mac
 | `app/.../capture/MediaSessionObserver.kt` | YouTube Music 세션의 메타데이터와 재생 상태 읽기 |
 | `app/.../data/ListenDatabase.kt` | Room 이벤트 보관함, 업로드 확인, 오류 보관 |
 | `app/.../data/SessionStore.kt` | Android Keystore AES-GCM으로 암호화한 로그인 정보 |
-| `app/.../network/FirstListenApi.kt` | 회원가입·로그인·회원 조회·로그아웃·기존 동기화 API |
+| `app/.../network/FirstListenApi.kt` | 인증·동기화·곡 조회·질문·Takeout JSON 업로드 API |
+| `app/.../TakeoutImportViewModel.kt` | 파일 선택 계정 검증, 가져오기 상태·결과 및 임시 파일 관리 |
 | `app/.../sync/ListenSyncWorker.kt` | 네트워크 조건, 지수 백오프, 일회성·주기 동기화 |
 | `app/.../MainActivity.kt` | 로그인, 권한 설정, 수집 토글, 최근 기록·동기화 상태 |
 

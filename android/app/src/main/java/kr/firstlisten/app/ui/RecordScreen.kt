@@ -29,9 +29,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kr.firstlisten.app.MainViewModel
+import kr.firstlisten.app.TakeoutImportState
 
 @Composable
-fun RecordScreen(model: MainViewModel, openPermissions: () -> Unit) {
+fun RecordScreen(model: MainViewModel, openPermissions: () -> Unit, importState: TakeoutImportState,
+    onImport: () -> Unit, onImportedTracks: () -> Unit) {
     val session by model.session.collectAsStateWithLifecycle()
     val capture by model.capture.collectAsStateWithLifecycle()
     val sync by model.sync.collectAsStateWithLifecycle()
@@ -77,6 +79,10 @@ fun RecordScreen(model: MainViewModel, openPermissions: () -> Unit) {
                     if (session.memberId != null) TextButton(enabled = !busy, onClick = model::logout) { Text("로그아웃") }
                 }
             }
+
+            TakeoutImportCard(importState,
+                signedIn = session.memberId != null && !session.needsLogin && !session.expired,
+                enabled = !busy, onImport = onImport, onImportedTracks = onImportedTracks)
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

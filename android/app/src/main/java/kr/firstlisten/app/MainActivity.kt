@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -44,13 +46,14 @@ class MainActivity : ComponentActivity() {
     private val model: MainViewModel by viewModels()
     private val library: LibraryViewModel by viewModels()
     private val chat: ChatViewModel by viewModels()
+    private val importer: TakeoutImportViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
-                FirstListenApp(model, library, chat) {
+                FirstListenApp(model, library, chat, importer) {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }
             }
@@ -64,10 +67,13 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun FirstListenApp(main: MainViewModel, library: LibraryViewModel, chat: ChatViewModel, openPermissions: () -> Unit) {
+private fun FirstListenApp(main: MainViewModel, library: LibraryViewModel, chat: ChatViewModel,
+    importer: TakeoutImportViewModel, openPermissions: () -> Unit) {
     val session by main.session.collectAsStateWithLifecycle()
     val libraryState by library.state.collectAsStateWithLifecycle()
     val chatState by chat.state.collectAsStateWithLifecycle()
+    val importState by importer.state.collectAsStateWithLifecycle()
+    val takeoutPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), importer::importSelected)
     var tab by rememberSaveable { mutableStateOf(Tab.RECORDS) }
     var tabOwner by rememberSaveable { mutableStateOf(session.ownerKey) }
     val signedIn = session.memberId != null && !session.needsLogin && !session.expired
@@ -78,7 +84,7 @@ private fun FirstListenApp(main: MainViewModel, library: LibraryViewModel, chat:
             tabOwner = session.ownerKey
         }
     }
-    LaunchedEffect(tab, session.sessionId) {
+    LaunchedEffect(tab, session.sessionId, importState.result?.job_id) {
         if (tab == Tab.LIBRARY && signedIn) library.refresh()
     }
     BackHandler(enabled = tab != Tab.RECORDS) {
@@ -97,7 +103,14 @@ private fun FirstListenApp(main: MainViewModel, library: LibraryViewModel, chat:
     }) { insets ->
         Box(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets)) {
             when {
-                tab == Tab.RECORDS -> RecordScreen(main, openPermissions)
+                tab == Tab.RECORDS -> RecordScreen(main, openPermissions,
+                    importState = importState.takeIf { it.ownerKey == session.ownerKey } ?: TakeoutImportState(),
+                    onImport = {
+                        // Some file providers label JSON as plain text or binary; validate the filename after selection.
+                        if (importer.beginSelection()) takeoutPicker.launch(arrayOf("*/*"))
+                    },
+                    onImportedTracks = { tab = Tab.LIBRARY },
+                )
                 !signedIn -> SignInPrompt { tab = Tab.RECORDS }
                 tab == Tab.LIBRARY && libraryState.ownerKey == session.ownerKey -> LibraryScreen(
                     state = libraryState,
