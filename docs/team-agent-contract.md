@@ -8,7 +8,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 - **현재 구현됨:** FastAPI 백엔드의 인증, 회원별 청취 이벤트 동기화, 곡 검색·상세·통계, 제한된 자연어 질문 조회.
 - **팀의 주요 구현 대상:** Android 권한·재생 세션 수집, 로컬 영속 저장과 오프라인 동기화, 최소 권한의 사용자 화면, 실제 기기 검증.
-- **후속 범위:** 대화 문맥, 추가 통계·월간 리포트, 별도 웹 앱. 팀의 합의 없이 MVP에 끼워 넣지 않는다.
+- **후속 범위:** 대화 문맥, 월간 리포트, 별도 웹 앱. (기간·순위 같은 자유 통계 질문은 Text-to-SQL로 이미 구현되어 있다.) 팀의 합의 없이 MVP에 끼워 넣지 않는다.
 - **기록의 의미:** YouTube Music이 제공하고 앱이 관찰한 데이터만 기록한다. 설치 전·수집 중단 중의 재생은 복원할 수 없으며, 총 시간은 실제 재생 시간을 완벽히 측정한다는 보장이 없는 관찰값이다.
 - **기술 기준:** Android는 Kotlin, Jetpack Compose, Room, WorkManager를 기본 방향으로 한다. 백엔드는 Python 3.12+, FastAPI, Pydantic, SQLAlchemy, Alembic, PostgreSQL이다.
 
@@ -30,6 +30,8 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 ### 공통
 
 - 기본 로컬 API 주소는 `http://localhost:8000`이다. Android Emulator에서 개발 PC의 API에 접근할 때는 환경별 주소 설정을 사용한다(일반 Emulator에서는 `10.0.2.2`가 호스트를 가리킨다). 실기기는 같은 네트워크의 개발 PC 주소를 사용한다. 주소를 코드에 고정하지 않는다.
+- 서버는 기본적으로 개발 PC 안(`127.0.0.1`)에서만 열린다. Emulator(`10.0.2.2`)는 그대로 접속되지만, 실기기 테스트 때는 서버를 `API_BIND=0.0.0.0 docker compose up -d`(직접 실행 시 `uvicorn ... --host 0.0.0.0`)로 띄운다.
+- Android 9 이상은 `http://` 평문 통신을 기본 차단한다. **디버그 빌드에서만** `network_security_config`로 개발 서버 주소(`10.0.2.2`, 개발 PC IP)의 평문 HTTP를 허용하고, 릴리스 빌드는 HTTPS만 사용한다. `usesCleartextTraffic=true`를 앱 전체에 켜지 않는다.
 - API 문서와 실행 가능한 계약은 `GET /docs` 및 `docs/openapi.json`에서 확인한다. 앱의 API 기본 경로는 `/api/v1`이다.
 - `/health`, `/ready`를 제외한 사용자 API에는 `Authorization: Bearer <access_token>`을 보낸다. 사용자 ID를 경로나 요청 본문으로 보내지 않는다.
 - 날짜·시각은 타임존이 포함된 ISO 8601 형식으로 주고받는다. API 저장 시각은 UTC이며 날짜를 사용자에게 보여줄 때 기본 시간대는 `Asia/Seoul`이다.
@@ -37,14 +39,17 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 ### 인증 및 회원
 
-| 목적 | 호출 | 성공 응답 |
-|---|---|---|
-| 가입 | `POST /api/v1/members` | `201`, `{ "id": "<uuid>", "email": "you@example.com" }` |
-| 로그인 | `POST /api/v1/auth/login` | `200`, `{ "access_token": "...", "token_type": "bearer", "expires_at": "<date-time>" }` |
-| 현재 회원 확인 | `GET /api/v1/members/me` | `200`, 회원 `id`, `email` |
-| 로그아웃 | `POST /api/v1/auth/logout` | `204`, 응답 본문 없음 |
+| 목적 | 호출 | 성공 응답 | 주요 오류 |
+|---|---|---|---|
+| 가입 | `POST /api/v1/members` | `201`, `{ "id": "<uuid>", "email": "you@example.com" }` | `409` 이미 가입된 이메일, `422` 형식 오류, `429` 요청 제한 |
+| 로그인 | `POST /api/v1/auth/login` | `200`, `{ "access_token": "...", "token_type": "bearer", "expires_at": "<date-time>" }` | `401` 이메일·비밀번호 불일치, `422`, `429` |
+| 현재 회원 확인 | `GET /api/v1/members/me` | `200`, 회원 `id`, `email` | `401` 토큰 없음·만료·폐기 |
+| 로그아웃 | `POST /api/v1/auth/logout` | `204`, 응답 본문 없음 | `401` |
 
 가입·로그인 본문은 `{"email":"you@example.com","password":"10자 이상의 비밀번호"}`다. 이메일은 서버에서 대소문자를 구분하지 않는다. 비밀번호는 앞뒤 공백도 비밀번호의 일부이므로 앱에서 trim하지 않는다. 길이는 10~128자다. 토큰은 만료 시각을 확인해 안전한 기기 저장소에 보관하고, 로그아웃 시 서버 호출 성공 후 로컬 토큰도 지운다.
+
+- **토큰 갱신(refresh) API는 없다.** 토큰 유효기간은 기본 30일(`expires_at`)이다. 만료 시각이 지났거나 보호 API가 `401`을 반환하면 로컬 토큰을 지우고 재로그인 화면으로 보낸다. 존재하지 않는 갱신 엔드포인트를 만들거나 호출하지 않는다.
+- **요청 제한:** 가입·로그인은 IP당 분당 10회, 질문(`/chat`)은 사용자당 분당 20회다. 초과하면 `429`와 `Retry-After`(초)를 반환한다. Emulator에서 로그인을 반복 테스트하면 쉽게 걸리므로 자동 재시도 루프를 만들지 않는다. 동기화와 곡 조회에는 요청 제한이 없다.
 
 ### 청취 이벤트 동기화
 
@@ -78,7 +83,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 4. 서버는 같은 이벤트의 가장 이른 관찰 시각과 가장 큰 누적 시간을 유지한다. `listened_ms`는 델타가 아니라 해당 이벤트의 누적 밀리초다. `31,000 → 120,000 → 31,000`을 보내도 최종 집계는 이벤트 한 개, 120,000ms다.
 5. 30,000ms 미만은 `ignored_below_threshold`로 저장·집계되지 않는다. 아직 진행 중인 세션은 같은 ID로 누적값을 계속 동기화할 수 있어야 한다. 서버가 `accepted`를 반환한 이벤트도 진행 중 세션의 새 누적값을 보낼 때 동일 ID를 유지한다.
 6. `accepted` 결과의 `track_id`를 곡 상세·통계·질문 조회에 사용한다. 클라이언트가 임의로 곡 UUID를 생성하지 않는다.
-7. 네트워크 실패·`5xx`는 지수형 재시도와 상한을 두고 재시도하되, 동일 이벤트 ID와 동일하거나 더 큰 누적값을 전송한다. `Retry-After`가 있는 `429`는 그 시간을 따른다. 인증 `401`은 토큰 갱신/재로그인 흐름으로 처리한다. 입력 오류 `422`와 ID-곡 충돌 `409`는 자동 반복하지 않고 사용자/진단 가능한 오류로 처리한다.
+7. 네트워크 실패·`5xx`는 지수형 재시도와 상한을 두고 재시도하되, 동일 이벤트 ID와 동일하거나 더 큰 누적값을 전송한다. `Retry-After`가 있는 `429`는 그 시간을 따른다. 인증 `401`은 재로그인 흐름으로 처리한다(토큰 갱신 API 없음). 재로그인 후 같은 이벤트 ID로 다시 보낸다. 입력 오류 `422`와 ID-곡 충돌 `409`는 자동 반복하지 않고 사용자/진단 가능한 오류로 처리한다.
 8. 한 배치에서 이벤트 ID를 다른 곡에 재사용하면 `409`이며 배치 전체가 롤백된다. 배치가 원자적이므로 부분 성공을 가정하지 않는다. 응답 `results`를 확인한 뒤 해당 상태를 로컬 큐에 반영한다.
 9. 최소 임계값 판정은 서버의 응답을 기준으로 한다. 클라이언트에서 짧은 세션을 아예 버리면 이후 누적 갱신 기회를 잃을 수 있으므로, 서버 응답 전에는 로컬 이벤트를 삭제하지 않는다.
 
@@ -98,7 +103,13 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 `POST /api/v1/chat` 요청은 `{"question":"입춘 언제부터 들었어?"}` 또는 `{"question":"이 노래 총 재생 시간이 얼마야?","track_id":"<선택한 곡 UUID>"}`다. 질문은 1~500자이며 `track_id`는 선택 사항이다.
 
-응답에는 `status`, `answer`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다.
+응답에는 `status`, `answer`, `metric`, `track`, `candidates`, `first_recorded_at`, `total_listened_ms`, `rows`가 있다. `status`는 `answered`, `needs_track`, `ambiguous`, `not_found`, `unsupported` 중 하나다. `metric`은 nullable한 `first`, `total`, `both`, `stats` 중 하나다. `debug` 필드는 서버 개발·평가용(`CHAT_DEBUG=true`)으로만 채워지므로 앱에서 사용하지 않는다.
+
+**결과 표시 방법**
+
+- 모든 상태에서 `answer`는 서버가 만든 한국어 문장이다. 기본으로 이 문장을 그대로 표시한다.
+- `metric`이 `first`/`total`/`both`이면 `first_recorded_at`(UTC, 표시할 때 `Asia/Seoul`로 변환)과 `total_listened_ms`(밀리초)를 구조화된 값으로 함께 쓸 수 있다.
+- `metric`이 `stats`이면 결과는 `rows`(최대 50행)에 있다. **열 이름은 질문마다 LLM이 정하므로 고정 스키마로 파싱하지 않는다.** `rows`를 표로 보여주려면 첫 행의 키를 열 제목으로 쓰고, 이름이 `_ms`로 끝나는 열은 밀리초이므로 시간 형식으로 바꿔 표시한다. 표를 만들지 않아도 `answer`만으로 결과가 전달된다.
 
 - `answered`: 서버가 계산한 결과를 표시한다.
 - `needs_track`: “이 노래”를 가리키는 `track_id`가 아직 없다. 곡을 선택하게 한다.
@@ -180,7 +191,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 - 오프라인 동안 Room에 쌓인 이벤트가 재연결·앱 재시작 후 동일 이벤트 ID로 동기화된다.
 - 사용자 A의 곡 ID를 사용자 B가 조회하면 곡 존재 여부가 노출되지 않는 `404`다.
 - 곡명으로 질문해 후보가 여러 개면 `ambiguous`를 표시하고, 곡 선택 전에는 통계가 표시되지 않는다.
-- `401`은 세션 만료 흐름, `429`는 `Retry-After`, `5xx`는 재시도 가능성, `422`/`409`는 재시도하지 않는 오류 흐름으로 처리된다.
+- `401`은 재로그인 흐름(토큰 갱신 API 없음), `429`는 `Retry-After`, `5xx`는 재시도 가능성, `422`/`409`는 재시도하지 않는 오류 흐름으로 처리된다.
 - 계정·곡·청취 이력이 하나도 없는 상태가 정상적인 빈 화면으로 동작한다.
 
 ## 7. 에이전트가 임의로 결정하면 안 되는 것

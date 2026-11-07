@@ -17,6 +17,7 @@ docker compose up --build -d
 - OpenAPI 계약: [docs/openapi.json](docs/openapi.json)
 - 상태 확인: `GET /health`, DB 연결 확인: `GET /ready`
 - 종료: `docker compose down` (DB 볼륨은 보존됩니다.)
+- Android 연결: Emulator는 `http://10.0.2.2:8000`을 사용합니다. 실기기는 API가 기본적으로 이 PC(127.0.0.1)에만 열려 있으므로 `API_BIND=0.0.0.0 docker compose up -d`로 띄운 뒤 같은 Wi-Fi에서 `http://<개발 PC IP>:8000`으로 접속합니다. 외부에 공개되므로 개발 중에만 사용하고 방화벽에서 8000 포트 허용이 필요할 수 있습니다.
 - Windows에서 `docker/init-db.sh`가 CRLF로 체크아웃되면 DB 역할 생성이 `set: Illegal option -`로 실패합니다. `.gitattributes`가 `*.sh`를 LF로 고정하며, 이전에 실패한 볼륨은 `docker compose down -v`로 지운 뒤 다시 실행해야 초기화됩니다.
 
 기본 비밀번호는 로컬 개발용입니다. 설정을 변경하려면 `.env.example`을 `.env`로 복사한 뒤 수정해 주세요. Compose는 세 DB 비밀번호를 사용하고, Python을 직접 실행할 때는 URL 설정도 사용합니다. 비밀번호의 URL 예약 문자는 URL에서 인코딩해야 합니다. DB 초기화 스크립트는 빈 볼륨에서 한 번 실행되므로 기존 볼륨의 비밀번호는 `.env` 변경만으로 바뀌지 않습니다.
@@ -32,6 +33,8 @@ docker compose up -d --build db
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+직접 실행한 서버도 기본은 이 PC에서만 접속됩니다. Android 실기기에서 접속하려면 `uvicorn app.main:app --reload --host 0.0.0.0`으로 실행해 주세요.
 
 애플리케이션은 시작할 때 테이블과 실행 계정의 권한을 확인합니다. PostgreSQL이 준비되지 않았거나 실행 계정이 테이블 소유자·관리자이거나 RLS가 꺼져 있으면 시작을 거부합니다. SQLite는 단위 테스트용이며 서버 실행용으로 지원하지 않습니다.
 
