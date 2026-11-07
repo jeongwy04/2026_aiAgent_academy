@@ -16,7 +16,8 @@ if context.is_offline_mode():
     with context.begin_transaction():
         context.run_migrations()
 else:
-    engine = create_engine(url, poolclass=pool.NullPool)
+    engine = create_engine(url, poolclass=pool.NullPool,
+                           connect_args={"connect_timeout": 5} if url.startswith("postgresql") else {})
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=Base.metadata)
         with context.begin_transaction():

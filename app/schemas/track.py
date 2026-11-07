@@ -8,7 +8,7 @@ class TrackOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     title: str
-    artist: str
+    artist: str | None
     album: str | None
     external_id: str | None
 
@@ -23,5 +23,7 @@ class TrackPage(BaseModel):
 class StatsOut(BaseModel):
     track: TrackOut
     first_recorded_at: datetime | None
-    total_listened_ms: int
+    total_listened_ms: int | None
     event_count: int
+    measured_event_count: int = 0
+    unknown_duration_event_count: int = 0

@@ -7,4 +7,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.test-results/
+.gradle-android/
+.android-build-tools/
 

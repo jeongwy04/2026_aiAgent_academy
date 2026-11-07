@@ -7,7 +7,8 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import get_settings
 from app.database import engine_for, verify_database_roles
-from app.routers import chat, listen, member, system, track
+from app.routers import chat, listen, member, system, track, import_job
+from app.services.import_service import ImportStoreError
 
 
 @asynccontextmanager
@@ -31,3 +32,12 @@ app.include_router(member.router)
 app.include_router(listen.router)
 app.include_router(track.router)
 app.include_router(chat.router)
+app.include_router(import_job.router)
+
+
+@app.exception_handler(ImportStoreError)
+async def import_storage_error(request, exc):
+    return JSONResponse(status_code=503, content={
+        "detail": "가져오기 저장 완료를 확인하지 못했습니다. 같은 파일로 다시 시도해 주세요.",
+        "job_id": str(exc.job_id),
+    })

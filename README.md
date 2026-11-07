@@ -1,9 +1,19 @@
 # 2026_aiAgent_academy
 # FirstListen (가칭)
 
+## Takeout 가져오기 추가
+
+`POST /api/v1/imports`로 ZIP/JSON을 업로드하면 YouTube Music 기록을 필터·검증한 뒤 배치 저장하고 신규·중복·제외·검토·오류 건수를 반환합니다. 작업 결과와 검토 항목 조회도 지원합니다. 기존 회원 인증·사용자별 RLS·곡별 조회를 재사용합니다. Takeout의 알 수 없는 청취 시간과 가수는 NULL로 저장합니다. [API·DB 설계와 검증 방법](docs/TAKEOUT_IMPORT.md)
+
+변경 반영: `docker compose up --build -d` (기존 볼륨 유지). 별도 DB 테스트: `python scripts/test_postgres_isolated.py`.
+
 Android에서 YouTube Music 청취 이력을 자동으로 기록하고, 자연어 질문을 SQL로 변환해 곡별 최초 기록일과 총 재생 시간을 조회하는 서비스입니다.
 
-FastAPI 백엔드의 인증, 청취 이벤트 동기화, 개인 곡 목록·통계, 제한된 한국어 질문 조회를 구현했습니다. 질문 분류는 LLM Tool Calling을 사용합니다. Android 수집기와 월간 리포트는 후속 구현 범위입니다.
+FastAPI 백엔드의 인증, 청취 이벤트 동기화, 개인 곡 목록·통계, 제한된 한국어 질문 조회를 구현했습니다. 질문 분류는 LLM Tool Calling을 사용합니다. Android 클라이언트는 미디어 세션 관찰, Room 저장, WorkManager 전송과 로그인·권한·상태 화면을 포함합니다. 실제 기기 수집 검증과 월간 리포트는 후속 범위입니다.
+
+## Android 실행
+
+Android Studio에서 `android/`를 열고 JDK 21, SDK Platform 36.1을 설정합니다. 앱에서 서버에 로그인한 후 알림 접근을 허용하고 청취 기록 수집을 켜면 됩니다. [설치·빌드·수집 규칙과 검증 방법](android/README.md)을 참고하세요.
 
 ## 백엔드 실행
 
@@ -226,7 +236,7 @@ WHERE user_id = :authenticated_user_id
 
 같은 이벤트를 31초 → 120초 → 31초로 전송해도 이벤트는 한 개, 총 시간은 120초로 유지되어야 합니다. 자연어 조회 결과는 기준 SQL의 집계값과 비교합니다.
 
-Android 수집기와 최소 권한·조회 화면은 필수입니다. 별도 웹 프론트엔드는 후순위로 둡니다.
+Android 수집기와 최소 권한·조회 화면은 `android/`에 구현되어 있습니다. 실제 기기에서 YouTube Music의 메타데이터·재생 상태 제공과 백그라운드 수집을 확인해야 합니다. 별도 웹 프론트엔드는 후순위로 둡니다.
 
 ## 고도화
 

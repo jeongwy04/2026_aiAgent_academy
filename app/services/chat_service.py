@@ -1,14 +1,14 @@
 """챗봇 흐름: 질문 분류 → (곡별 지표) 곡 확정 → 고정 SQL / (자유 통계) Text-to-SQL → 응답 생성."""
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.ai.api_use.chat_classify import classify_question
 from app.ai.api_use.query.executor import run_metric
 from app.ai.api_use.query.response import build_answer, format_rows
 from app.ai.api_use.text_to_sql import run_stats
-from app.models import Track
+from app.models import Track, ListenEvent
 from app.schemas import ChatInput, ChatOut, TrackOut
 from app.services.track_service import owned_track
 
@@ -52,11 +52,20 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
         track = candidates[0]
 
     first, total = run_metric(session, metric, user_id, track.id)
+    unknown = session.scalar(select(func.count()).select_from(ListenEvent).where(
+        ListenEvent.user_id == user_id, ListenEvent.track_id == track.id, ListenEvent.listened_ms.is_(None)))
+    if unknown and metric in ("total", "both") and not total:
+        answer, first, _ = build_answer(first, None)
+        return ChatOut(status="answered", metric=metric, track=TrackOut.model_validate(track),
+                       first_recorded_at=first, total_listened_ms=None,
+                       answer=(answer + " 청취 시각 기록은 있지만 재생 시간을 알 수 없어 총 시간을 계산할 수 없습니다.").strip())
     # For total-only queries, absence must be determined separately: SUM=0 is
     # not a license to invent a first date.
     if (metric in ("first", "both") and first is None) or (metric == "total" and not total):
         return ChatOut(status="not_found", metric=metric, track=TrackOut.model_validate(track),
                        answer="해당 곡의 청취 기록이 없습니다.")
     answer, first, total = build_answer(first, total)
+    if unknown and total is not None:
+        answer += f" 재생 시간을 확인할 수 없는 가져오기 기록 {unknown}건은 시간 합계에서 제외했습니다."
     return ChatOut(status="answered", metric=metric, answer=answer,
                    track=TrackOut.model_validate(track), first_recorded_at=first, total_listened_ms=total)

@@ -2,5 +2,6 @@
 from app.models.base import Base, utcnow
 from app.models.member import AuthSession, Member
 from app.models.track import ListenEvent, Track
+from app.models.import_job import ImportJob, ImportEvidence, ImportIssue
 
-__all__ = ["Base", "utcnow", "Member", "AuthSession", "Track", "ListenEvent"]
+__all__ = ["Base", "utcnow", "Member", "AuthSession", "Track", "ListenEvent", "ImportJob", "ImportEvidence", "ImportIssue"]

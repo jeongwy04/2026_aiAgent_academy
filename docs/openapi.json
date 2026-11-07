@@ -430,10 +430,208 @@
           }
         ]
       }
+    },
+    "/api/v1/imports": {
+      "post": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Upload Import",
+        "operationId": "upload_import_api_v1_imports_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "member",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Member"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_import_api_v1_imports_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{job_id}": {
+      "get": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Get Import",
+        "operationId": "get_import_api_v1_imports__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{job_id}/issues": {
+      "get": {
+        "tags": [
+          "import"
+        ],
+        "summary": "Get Issues",
+        "operationId": "get_issues_api_v1_imports__job_id__issues_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportIssuesPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Body_upload_import_api_v1_imports_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_import_api_v1_imports_post"
+      },
       "ChatInput": {
         "properties": {
           "question": {
@@ -665,6 +863,219 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ImportIssueOut": {
+        "properties": {
+          "source_index": {
+            "type": "integer",
+            "title": "Source Index"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "review",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "record": {
+            "title": "Record"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_index",
+          "status",
+          "reason",
+          "record"
+        ],
+        "title": "ImportIssueOut"
+      },
+      "ImportIssuesPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssueOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ImportIssuesPage"
+      },
+      "ImportJobOut": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "created_at",
+          "completed_at",
+          "result",
+          "error_code"
+        ],
+        "title": "ImportJobOut"
+      },
+      "ImportSummary": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "completed",
+            "title": "Status",
+            "default": "completed"
+          },
+          "parser_version": {
+            "type": "string",
+            "title": "Parser Version"
+          },
+          "json_sha256": {
+            "type": "string",
+            "title": "Json Sha256"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "inserted": {
+            "type": "integer",
+            "title": "Inserted"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          },
+          "excluded": {
+            "type": "integer",
+            "title": "Excluded"
+          },
+          "review": {
+            "type": "integer",
+            "title": "Review"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "new_tracks": {
+            "type": "integer",
+            "title": "New Tracks"
+          },
+          "distinct_tracks": {
+            "type": "integer",
+            "title": "Distinct Tracks"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "parser_version",
+          "json_sha256",
+          "total",
+          "accepted",
+          "inserted",
+          "duplicates",
+          "excluded",
+          "review",
+          "errors",
+          "new_tracks",
+          "distinct_tracks",
+          "reasons"
+        ],
+        "title": "ImportSummary"
+      },
       "MemberOut": {
         "properties": {
           "id": {
@@ -702,12 +1113,29 @@
             "title": "First Recorded At"
           },
           "total_listened_ms": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Listened Ms"
           },
           "event_count": {
             "type": "integer",
             "title": "Event Count"
+          },
+          "measured_event_count": {
+            "type": "integer",
+            "title": "Measured Event Count",
+            "default": 0
+          },
+          "unknown_duration_event_count": {
+            "type": "integer",
+            "title": "Unknown Duration Event Count",
+            "default": 0
           }
         },
         "type": "object",
@@ -838,7 +1266,14 @@
             "title": "Title"
           },
           "artist": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Artist"
           },
           "album": {
