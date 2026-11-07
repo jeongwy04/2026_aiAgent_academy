@@ -1,0 +1,23 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from app.schemas.common import Input
+from app.schemas.track import TrackOut
+
+
+class ChatInput(Input):
+    question: str = Field(min_length=1, max_length=500)
+    track_id: UUID | None = None
+
+
+class ChatOut(BaseModel):
+    status: Literal["answered", "needs_track", "ambiguous", "not_found", "unsupported"]
+    answer: str
+    metric: Literal["first", "total", "both"] | None = None
+    track: TrackOut | None = None
+    candidates: list[TrackOut] = Field(default_factory=list)
+    first_recorded_at: datetime | None = None
+    total_listened_ms: int | None = None

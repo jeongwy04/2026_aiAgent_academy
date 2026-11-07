@@ -1,22 +1,19 @@
+"""청취 이벤트 동기화: 곡 upsert + 이벤트 upsert (재시도·지연 도착에도 중복 합산 없음)."""
 import hashlib
 import json
-import unicodedata
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models import ListenEvent, Track, utcnow
-from app.schemas import EventInput, EventResult, StatsOut, SyncOut, TrackInput, TrackOut
+from app.schemas import EventInput, EventResult, SyncOut, TrackInput
+from app.utils import normalized
 
 MIN_LISTENED_MS = 30_000
-
-
-def normalized(value: str | None) -> str:
-    return " ".join(unicodedata.normalize("NFKC", value or "").casefold().split())
 
 
 def source_key(track: TrackInput) -> str:
@@ -72,19 +69,3 @@ def save_event(session: Session, user_id: uuid.UUID, event: EventInput) -> Event
 
 def sync_events(session: Session, user_id: uuid.UUID, events: list[EventInput]) -> SyncOut:
     return SyncOut(results=[save_event(session, user_id, event) for event in events])
-
-
-def owned_track(session: Session, user_id: uuid.UUID, track_id: uuid.UUID) -> Track:
-    track = session.scalar(select(Track).where(Track.id == track_id, Track.user_id == user_id))
-    if track is None:
-        raise HTTPException(404, "해당 곡의 청취 기록이 없습니다.")
-    return track
-
-
-def track_stats(session: Session, user_id: uuid.UUID, track: Track) -> StatsOut:
-    first, total, count = session.execute(select(
-        func.min(ListenEvent.observed_at), func.coalesce(func.sum(ListenEvent.listened_ms), 0), func.count()
-    ).where(ListenEvent.user_id == user_id, ListenEvent.track_id == track.id)).one()
-    return StatsOut(track=TrackOut.model_validate(track), first_recorded_at=first,
-                    total_listened_ms=int(total), event_count=count)
-

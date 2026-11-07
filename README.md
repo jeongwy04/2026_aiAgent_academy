@@ -3,7 +3,7 @@
 
 Android에서 YouTube Music 청취 이력을 자동으로 기록하고, 자연어 질문을 SQL로 변환해 곡별 최초 기록일과 총 재생 시간을 조회하는 서비스입니다.
 
-FastAPI 백엔드의 인증, 청취 이벤트 동기화, 개인 곡 목록·통계, 제한된 한국어 질문 조회를 구현했습니다. Android 수집기, 외부 LLM Tool Calling, 월간 리포트는 후속 구현 범위입니다.
+FastAPI 백엔드의 인증, 청취 이벤트 동기화, 개인 곡 목록·통계, 제한된 한국어 질문 조회를 구현했습니다. 질문 분류는 LLM Tool Calling을 사용합니다. Android 수집기와 월간 리포트는 후속 구현 범위입니다.
 
 ## 백엔드 실행
 
@@ -86,7 +86,7 @@ uvicorn app.main:app --reload
 
 `{"question":"입춘 언제부터 들었어?"}`처럼 곡명만 보내도 됩니다. 제목이 일치하는 곡을 우선 찾고, 없으면 제목 부분 검색을 사용합니다. 여러 후보이면 `ambiguous`와 최대 20개 `candidates`를 반환하며 `track_id`를 선택하기 전에는 집계하지 않습니다. `이 노래`에 곡 ID가 없으면 `needs_track`, 기록이 없으면 `not_found`, 지원하지 않는 질문은 `unsupported`를 반환합니다. 선택한 타 사용자 곡 ID는 `404`입니다.
 
-현재 질문 분류·SQL 제안은 규칙 기반이며 외부 LLM 호출은 없습니다. 지원하는 한국어 표현에는 “언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간”이 포함됩니다. 자유로운 모든 표현을 이해하는 챗봇은 아닙니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
+`PICKLE_API_KEY`가 설정되면 LangChain `ChatOpenAI(model="pickle-general", base_url="https://llm.pcl.kr/v1", temperature=0.3).bind_tools(...)`로 질문을 분류합니다. LLM은 `get_first_listen`, `get_total_listen_time`, `get_listen_summary` 중 하나를 고르고 `title` 인자로 곡명을 추출할 뿐이며, SQL은 생성하지 않습니다. 곡 찾기와 검증된 고정 SQL 실행은 기존과 같습니다. 기간·다른 사용자·수정 요청 등 범위 밖 질문은 LLM 호출 전에 규칙으로 거절합니다. 키가 없거나 호출이 실패하면 규칙 기반 분류(“언제부터 들었어?”, “최초 기록일”, “얼마나 들었어?”, “총 재생 시간”, “몇 시간” 등)로 대체합니다. 날짜 응답은 기본 `Asia/Seoul`, API 시각은 UTC, 시간 집계는 밀리초를 기준으로 합니다. 대화 문맥은 저장하지 않습니다.
 
 SQLGlot AST를 서버의 허용된 집계·인증 필터와 대조하고 검증된 서버 SQL만 실행합니다. 이 검증기는 향후 LLM Tool Calling에도 재사용할 수 있습니다. 현재는 쿼리의 의미가 비슷해도 허용된 AST 형태가 아니면 거절하는 보수적인 정책입니다. 읽기 전용 계정·트랜잭션, 강제 RLS, 트랜잭션 로컬 사용자 컨텍스트, 2초 쿼리 제한을 함께 적용합니다. [SQLAlchemy의 원자적 upsert](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html#insert-on-conflict-upsert)와 [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)를 사용합니다.
 
@@ -114,6 +114,23 @@ python scripts/export_openapi.py
 PostgreSQL 테스트와 Postman은 임의 이메일의 테스트 회원·기록을 생성하므로 개발 전용 DB에서 실행해 주세요. Postman은 기본 `http://127.0.0.1:8000`을 사용하며 다른 주소는 `--env-var base_url=http://...`으로 지정할 수 있습니다. CLI 없이 Postman 앱을 사용하려면 [OpenAPI 계약](docs/openapi.json)을 가져올 수 있습니다.
 
 코드는 `app/`, 마이그레이션은 `migrations/`, 회귀 테스트는 `tests/`, 실행 가능한 Postman v3 컬렉션은 `postman/collections/firstlisten/`에 있습니다.
+
+```
+app/
+├── main.py              # 진입점: 앱 생성, 시작 시 DB 권한 점검, 라우터 등록
+├── config.py            # 환경변수 설정
+├── database.py          # DB 엔진·세션, RLS 사용자 컨텍스트, 역할 점검
+├── dependencies.py      # Depends 공통: 로그인 회원, DB 세션, 요청 제한
+├── utils.py             # 문자열 정규화
+├── models/              # DB 엔티티 (member: 회원·토큰 / track: 곡·청취 이벤트)
+├── schemas/             # 요청·응답 DTO (member / listen / track / chat)
+├── routers/             # API 라우팅 (system / member / listen / track / chat)
+├── services/            # 비즈니스 로직 (auth, rate_limiter, listen·track·chat 서비스)
+└── ai/api_use/          # 챗봇 AI 모듈
+    ├── intent_list.py   # Tool Calling 도구 목록·분류 프롬프트
+    ├── chat_classify.py # 범위 가드 → LLM 분류 → 정규식 fallback
+    └── query/           # validator(SQL 검증) · executor(실행) · response(응답 문장)
+```
 
 ## 기능
 

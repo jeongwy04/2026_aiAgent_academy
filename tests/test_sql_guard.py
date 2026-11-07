@@ -1,6 +1,6 @@
 import pytest
 
-from app.sql_guard import UnsafeSQL, metric_sql, validate_sql
+from app.ai.api_use.query.validator import UnsafeSQL, metric_sql, validate_sql
 
 
 @pytest.mark.parametrize("metric", ["first", "total", "both"])

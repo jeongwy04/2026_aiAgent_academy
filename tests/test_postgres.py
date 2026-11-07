@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.config import get_settings
-from app.db import engine_for, set_user_context, session_scope, verify_database_roles
+from app.database import engine_for, set_user_context, session_scope, verify_database_roles
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL", "").startswith("postgresql"), reason="PostgreSQL integration only")
 

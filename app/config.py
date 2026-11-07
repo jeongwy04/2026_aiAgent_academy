@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     auth_requests_per_minute: int = Field(default=10, ge=1, le=1000)
     query_timeout_ms: int = Field(default=2000, ge=100, le=30_000)
     display_timezone: str = "Asia/Seoul"
+    # Empty key = regex classifier only (tests, offline development).
+    pickle_api_key: str = ""
+    chat_model: str = "pickle-general"
+    llm_base_url: str = "https://llm.pcl.kr/v1"
 
     @model_validator(mode="after")
     def valid_timezone(self):

@@ -5,10 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.db import engine_for
+from app.database import engine_for
 from app.main import app
 from app.models import Base
-from app.security import limiter
+from app.services.rate_limiter import limiter
 
 
 @pytest.fixture
@@ -19,6 +19,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("READ_DATABASE_URL", read_url)
     monkeypatch.setenv("AUTH_REQUESTS_PER_MINUTE", "1000")
     monkeypatch.setenv("CHAT_REQUESTS_PER_MINUTE", "1000")
+    monkeypatch.setenv("PICKLE_API_KEY", "")  # regex classifier; LLM path is mocked per test
     get_settings.cache_clear()
     limiter.entries.clear()
     if url.startswith("sqlite"):
