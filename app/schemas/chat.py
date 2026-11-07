@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -16,8 +16,9 @@ class ChatInput(Input):
 class ChatOut(BaseModel):
     status: Literal["answered", "needs_track", "ambiguous", "not_found", "unsupported"]
     answer: str
-    metric: Literal["first", "total", "both"] | None = None
+    metric: Literal["first", "total", "both", "stats"] | None = None
     track: TrackOut | None = None
     candidates: list[TrackOut] = Field(default_factory=list)
     first_recorded_at: datetime | None = None
     total_listened_ms: int | None = None
+    rows: list[dict[str, Any]] = Field(default_factory=list)  # stats(Text-to-SQL) 결과, 최대 50행

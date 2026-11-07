@@ -1,4 +1,4 @@
-"""챗봇 흐름: 질문 분류 → 곡 확정 → 검증된 SQL 실행 → 응답 생성."""
+"""챗봇 흐름: 질문 분류 → (곡별 지표) 곡 확정 → 고정 SQL / (자유 통계) Text-to-SQL → 응답 생성."""
 from uuid import UUID
 
 from sqlalchemy import select
@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.ai.api_use.chat_classify import classify_question
 from app.ai.api_use.query.executor import run_metric
-from app.ai.api_use.query.response import build_answer
+from app.ai.api_use.query.response import build_answer, format_rows
+from app.ai.api_use.text_to_sql import run_stats
 from app.models import Track
 from app.schemas import ChatInput, ChatOut, TrackOut
 from app.services.track_service import owned_track
@@ -31,6 +32,11 @@ def answer_question(session: Session, user_id: UUID, request: ChatInput) -> Chat
     metric, title = classify_question(request.question)
     if metric is None:
         return ChatOut(status="unsupported", answer="본인 곡의 최초 기록일과 기록된 총 재생 시간을 조회할 수 있습니다. 곡명과 함께 질문해 주세요.")
+    if metric == "stats":
+        rows = run_stats(session, user_id, request.question)
+        if rows is None:
+            return ChatOut(status="unsupported", metric="stats", answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
+        return ChatOut(status="answered" if rows else "not_found", metric="stats", answer=format_rows(rows), rows=rows)
     if request.track_id:
         track = owned_track(session, user_id, request.track_id)
     else:

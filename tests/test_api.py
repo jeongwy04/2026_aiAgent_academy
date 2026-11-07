@@ -246,3 +246,58 @@ def test_chat_tool_calling_and_regex_fallback(client, member, make_event, monkey
     # API failure falls back to the regex classifier.
     answer = ask("입춘 얼마나 들었어?", RuntimeError("boom"))
     assert answer["status"] == "answered" and answer["total_listened_ms"] == 60_000
+
+
+def test_chat_text_to_sql_self_heals_and_stays_private(client, member, make_event, monkeypatch):
+    alice, _, _ = member()
+    bob, _, _ = member()
+    sync(client, alice, [make_event(ms=60_000), make_event(ms=90_000, title="봄", external_id="spring")])
+    sync(client, bob, [make_event(ms=3_600_000, title="밥곡", external_id="bob")])
+    monkeypatch.setenv("PICKLE_API_KEY", "test-key")
+    get_settings.cache_clear()
+
+    class Msg:
+        def __init__(self, content=None, tool_calls=()):
+            self.content, self.tool_calls = content, list(tool_calls)
+
+    class Fake:
+        def __init__(self, replies):
+            self.replies, self.seen = list(replies), []
+
+        def invoke(self, messages):
+            self.seen.append(messages)
+            reply = self.replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+    stats_call = [{"name": "query_listening_stats", "args": {}}]
+    top = ("```sql\nSELECT t.title, SUM(e.listened_ms) AS total_ms FROM listen_events e "
+           "JOIN tracks t ON t.id = e.track_id GROUP BY t.title ORDER BY total_ms DESC LIMIT 5;\n```")
+
+    def ask(question, classify_reply, sql_replies, headers=alice):
+        sql_llm = Fake(sql_replies)
+        monkeypatch.setattr("app.ai.api_use.chat_classify._llm", lambda *_: Fake([classify_reply]))
+        monkeypatch.setattr("app.ai.api_use.text_to_sql.chat_model", lambda *_: sql_llm)
+        return client.post("/api/v1/chat", headers=headers, json={"question": question}).json(), sql_llm
+
+    # Unsafe SQL, then a DB error, then a valid query: self-healing with feedback each time.
+    answer, sql_llm = ask("제일 많이 들은 곡", Msg(tool_calls=stats_call),
+                          [Msg("SELECT * FROM members"), Msg("SELECT nope FROM tracks"), Msg(top)])
+    assert answer["status"] == "answered" and answer["metric"] == "stats", answer
+    assert [r["title"] for r in answer["rows"]] == ["봄", "입춘"]  # Bob's 1-hour track never appears
+    assert "1분 30초" in answer["answer"]
+    assert len(sql_llm.seen) == 3 and "실패했습니다" in sql_llm.seen[2][-1][1]
+    # Even a query with no user filter only sees the caller's own rows.
+    answer, _ = ask("내 곡 몇 개야", Msg(tool_calls=stats_call), [Msg("SELECT COUNT(*) AS n FROM tracks")], headers=bob)
+    assert answer["rows"] == [{"n": 1}]
+    # Three failures -> unsupported, no fixed-SQL guess.
+    answer, _ = ask("월별 청취 시간", Msg(tool_calls=stats_call), [Msg("SELECT pg_sleep(9)")] * 3)
+    assert answer["status"] == "unsupported" and answer["metric"] == "stats"
+    # Period words force the stats path even if the classifier picked a fixed per-track tool.
+    answer, _ = ask("지난달 입춘 얼마나 들었어?", Msg(tool_calls=[{"name": "get_total_listen_time", "args": {"title": "입춘"}}]),
+                    [Msg("SELECT SUM(listened_ms) AS total_ms FROM listen_events WHERE 1 = 0")])
+    assert answer["metric"] == "stats" and answer["status"] == "not_found"
+    # LLM failure on the stats path -> unsupported.
+    answer, _ = ask("이번 주 청취 시간", Msg(tool_calls=stats_call), [RuntimeError("down")])
+    assert answer["status"] == "unsupported"

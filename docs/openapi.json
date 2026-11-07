@@ -486,7 +486,8 @@
                 "enum": [
                   "first",
                   "total",
-                  "both"
+                  "both",
+                  "stats"
                 ]
               },
               {
@@ -534,6 +535,14 @@
               }
             ],
             "title": "Total Listened Ms"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
           }
         },
         "type": "object",
