@@ -254,6 +254,7 @@ def test_chat_text_to_sql_self_heals_and_stays_private(client, member, make_even
     sync(client, alice, [make_event(ms=60_000), make_event(ms=90_000, title="봄", external_id="spring")])
     sync(client, bob, [make_event(ms=3_600_000, title="밥곡", external_id="bob")])
     monkeypatch.setenv("PICKLE_API_KEY", "test-key")
+    monkeypatch.setenv("CHAT_DEBUG", "true")
     get_settings.cache_clear()
 
     class Msg:
@@ -288,6 +289,8 @@ def test_chat_text_to_sql_self_heals_and_stays_private(client, member, make_even
     assert [r["title"] for r in answer["rows"]] == ["봄", "입춘"]  # Bob's 1-hour track never appears
     assert "1분 30초" in answer["answer"]
     assert len(sql_llm.seen) == 3 and "실패했습니다" in sql_llm.seen[2][-1][1]
+    attempts = answer["debug"]["sql_attempts"]
+    assert [bool(x["error"]) for x in attempts] == [True, True, False] and attempts[0]["sql"] == "SELECT * FROM members"
     # Even a query with no user filter only sees the caller's own rows.
     answer, _ = ask("내 곡 몇 개야", Msg(tool_calls=stats_call), [Msg("SELECT COUNT(*) AS n FROM tracks")], headers=bob)
     assert answer["rows"] == [{"n": 1}]

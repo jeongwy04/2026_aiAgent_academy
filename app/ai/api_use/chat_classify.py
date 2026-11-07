@@ -14,7 +14,7 @@ from app.utils import normalized
 logger = logging.getLogger(__name__)
 
 # Always rejected, before any classifier: modifications, third-party data, SQL markers.
-OUT_OF_SCOPE = re.compile(r"다른\s*(사용자|사람|회원)|타인|전체\s*(사용자|회원)|삭제|수정|변경|업데이트|drop|insert|update|delete|;|--|/\*")
+OUT_OF_SCOPE = re.compile(r"다른\s*(사용자|사람|회원)|타인|(전체|모든)\s*(사용자|회원)|삭제|수정|변경|업데이트|drop|insert|update|delete|;|--|/\*")
 # Period/ranking questions: Text-to-SQL path only (fixed per-track SQL would ignore the period).
 STATS_HINT = re.compile(r"이번\s*달|지난\s*달|월별|기간별|가장|제일|랭킹|순위|오늘|어제|작년|올해|지난주|이번주|지난달|이번달|지난\s*주|이번\s*주|\d+\s*년|\d+\s*월|\d+\s*일|부터.*까지")
 
@@ -48,7 +48,7 @@ def extract_title(question: str) -> str:
 def chat_model(api_key: str, model: str, base_url: str):
     from langchain_openai import ChatOpenAI  # optional at import time: missing package = regex fallback
 
-    return ChatOpenAI(model=model, api_key=api_key, base_url=base_url, temperature=0.3, timeout=10, max_retries=1)
+    return ChatOpenAI(model=model, api_key=api_key, base_url=base_url, temperature=0, timeout=10, max_retries=1)
 
 
 @lru_cache

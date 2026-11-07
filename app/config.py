@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     pickle_api_key: str = ""
     chat_model: str = "pickle-general"
     llm_base_url: str = "https://llm.pcl.kr/v1"
+    # true: Text-to-SQL 생성 SQL·시도 내역을 응답 debug 필드에 포함 (평가·개발 전용)
+    chat_debug: bool = False
 
     @model_validator(mode="after")
     def valid_timezone(self):

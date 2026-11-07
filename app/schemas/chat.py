@@ -22,3 +22,4 @@ class ChatOut(BaseModel):
     first_recorded_at: datetime | None = None
     total_listened_ms: int | None = None
     rows: list[dict[str, Any]] = Field(default_factory=list)  # stats(Text-to-SQL) 결과, 최대 50행
+    debug: dict[str, Any] | None = None  # CHAT_DEBUG=true일 때만: {"sql_attempts": [...]}

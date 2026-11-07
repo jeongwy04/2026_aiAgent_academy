@@ -34,6 +34,8 @@ services:
       DATABASE_URL: postgresql+psycopg://firstlisten_app:${APP_DB_PASSWORD:-local-app-password}@db:5432/firstlisten
       READ_DATABASE_URL: postgresql+psycopg://firstlisten_reader:${READ_DB_PASSWORD:-local-reader-password}@db:5432/firstlisten
       PICKLE_API_KEY: ${PICKLE_API_KEY:-}
+      CHAT_REQUESTS_PER_MINUTE: ${CHAT_REQUESTS_PER_MINUTE:-20}
+      CHAT_DEBUG: ${CHAT_DEBUG:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully

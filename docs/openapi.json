@@ -543,6 +543,18 @@
             },
             "type": "array",
             "title": "Rows"
+          },
+          "debug": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debug"
           }
         },
         "type": "object",

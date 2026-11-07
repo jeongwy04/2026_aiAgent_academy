@@ -8,10 +8,13 @@ from app.ai.api_use.chat_classify import classify_question
 from app.ai.api_use.query.executor import run_metric
 from app.ai.api_use.query.response import build_answer, format_rows
 from app.ai.api_use.text_to_sql import run_stats
+from app.config import get_settings
 from app.models import Track
 from app.schemas import ChatInput, ChatOut, TrackOut
 from app.services.track_service import owned_track
 
+UNSUPPORTED = ("본인 청취 기록만 조회할 수 있습니다. 곡별 최초 기록일·총 재생 시간(예: '입춘 언제부터 들었어?')이나 "
+               "'이번 달 가장 많이 들은 곡', '월별 청취 시간' 같은 통계를 질문해 주세요.")
 UNSPECIFIED_TITLES = ("이 노래", "이 곡", "그 노래", "그 곡", "", "내", "제")
 
 
@@ -31,12 +34,15 @@ def find_candidates(session: Session, user_id: UUID, title: str) -> list[Track]:
 def answer_question(session: Session, user_id: UUID, request: ChatInput) -> ChatOut:
     metric, title = classify_question(request.question)
     if metric is None:
-        return ChatOut(status="unsupported", answer="본인 곡의 최초 기록일과 기록된 총 재생 시간을 조회할 수 있습니다. 곡명과 함께 질문해 주세요.")
+        return ChatOut(status="unsupported", answer=UNSUPPORTED)
     if metric == "stats":
-        rows = run_stats(session, user_id, request.question)
-        if rows is None:
-            return ChatOut(status="unsupported", metric="stats", answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
-        return ChatOut(status="answered" if rows else "not_found", metric="stats", answer=format_rows(rows), rows=rows)
+        result = run_stats(session, user_id, request.question)
+        debug = {"sql_attempts": result.attempts} if get_settings().chat_debug else None
+        if result.rows is None:
+            return ChatOut(status="unsupported", metric="stats", debug=debug,
+                           answer="이 통계 질문은 처리하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.")
+        return ChatOut(status="answered" if result.rows else "not_found", metric="stats", debug=debug,
+                       answer=format_rows(result.rows), rows=result.rows)
     if request.track_id:
         track = owned_track(session, user_id, request.track_id)
     else:
