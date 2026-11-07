@@ -6,7 +6,7 @@
 
 FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 청취 이력을 저장하고, 사용자가 곡별 최초 기록일과 누적 청취 시간을 확인하도록 돕는 앱이다.
 
-- **현재 구현됨:** FastAPI 백엔드의 인증, 회원별 청취 이벤트 동기화, 곡 검색·상세·통계, 제한된 자연어 질문 조회.
+- **현재 구현됨:** FastAPI 백엔드의 인증, 회원별 청취 이벤트 동기화, 곡 검색·상세·통계, 제한된 자연어 질문 조회, Google Takeout 청취 기록 가져오기.
 - **팀의 주요 구현 대상:** Android 권한·재생 세션 수집, 로컬 영속 저장과 오프라인 동기화, 최소 권한의 사용자 화면, 실제 기기 검증.
 - **후속 범위:** 대화 문맥, 월간 리포트, 별도 웹 앱. (기간·순위 같은 자유 통계 질문은 Text-to-SQL로 이미 구현되어 있다.) 팀의 합의 없이 MVP에 끼워 넣지 않는다.
 - **기록의 의미:** YouTube Music이 제공하고 앱이 관찰한 데이터만 기록한다. 설치 전·수집 중단 중의 재생은 복원할 수 없으며, 총 시간은 실제 재생 시간을 완벽히 측정한다는 보장이 없는 관찰값이다.
@@ -95,9 +95,32 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 |---|---|---|
 | 내 곡 검색·페이지 조회 | `GET /api/v1/tracks?q=<검색어>&limit=20&offset=0` | `{ "items": [Track], "total": 0, "limit": 20, "offset": 0 }` |
 | 곡 상세 | `GET /api/v1/tracks/{track_id}` | `Track` |
-| 곡별 통계 | `GET /api/v1/tracks/{track_id}/stats` | `{ "track": Track, "first_recorded_at": "<date-time 또는 null>", "total_listened_ms": 0, "event_count": 0 }` |
+| 곡별 통계 | `GET /api/v1/tracks/{track_id}/stats` | `{ "track": Track, "first_recorded_at": "<date-time 또는 null>", "total_listened_ms": "<정수 또는 null>", "event_count": 0, "measured_event_count": 0, "unknown_duration_event_count": 0 }` |
 
-`Track`은 `{ "id": "<uuid>", "title": "...", "artist": "...", "album": "<문자열 또는 null>", "external_id": "<문자열 또는 null>" }`다. `q`는 최대 300자, `limit`은 1~100(기본 20), `offset`은 0~100,000(기본 0)이다. 페이지의 빈 목록과 통계의 `first_recorded_at: null`은 정상적인 빈 상태로 보여준다. 모든 검색과 조회는 로그인한 본인의 곡만 대상으로 한다.
+`Track`은 `{ "id": "<uuid>", "title": "...", "artist": "<문자열 또는 null>", "album": "<문자열 또는 null>", "external_id": "<문자열 또는 null>" }`다. **`artist`는 null일 수 있다.** Takeout으로 가져온 곡은 가수 정보가 없으므로, 앱은 null을 허용하는 타입으로 파싱하고 "가수 정보 없음"처럼 표시한다. `q`는 최대 300자, `limit`은 1~100(기본 20), `offset`은 0~100,000(기본 0)이다. 페이지의 빈 목록과 통계의 `first_recorded_at: null`은 정상적인 빈 상태로 보여준다. 모든 검색과 조회는 로그인한 본인의 곡만 대상으로 한다.
+
+곡별 통계 필드의 의미는 다음과 같다.
+
+- `event_count`: 인정된 청취 이벤트 수 (Android 기록 + Takeout 기록)
+- `measured_event_count`: 재생 시간이 측정된 이벤트 수 (Android 기록)
+- `unknown_duration_event_count`: 재생 시간을 알 수 없는 이벤트 수 (Takeout 기록, `event_count - measured_event_count`)
+- `total_listened_ms`: 측정된 이벤트의 재생 시간 합계. **기록이 없거나, 측정된 이벤트 없이 Takeout 기록만 있으면 null이다.** null을 0으로 바꿔 표시하지 않는다. `unknown_duration_event_count > 0`이면 "재생 시간 미확인 N건 제외"를 함께 표시한다.
+
+### Takeout 가져오기
+
+| 목적 | 호출 | 주요 응답 |
+|---|---|---|
+| 업로드 | `POST /api/v1/imports` (`multipart/form-data`, 필드 `file`) | `200`, `ImportSummary` |
+| 작업 결과 조회 | `GET /api/v1/imports/{job_id}` | `{ "job_id", "status": "processing" \| "completed" \| "failed", "created_at", "completed_at", "result": ImportSummary 또는 null, "error_code" }` |
+| 검토·오류 항목 | `GET /api/v1/imports/{job_id}/issues?limit=20&offset=0` | `{ "items": [{ "source_index", "status": "review" \| "error", "reason", "record" }], "total", "limit", "offset" }` |
+
+- 파일은 `.zip` 또는 `.json`만 받으며 최대 100MB다. ZIP 안의 파일 경로는 선택 쿼리 `member`로 지정할 수 있다.
+- **동기 처리**다. 업로드 응답이 오면 저장이 끝난 것이며, 클라이언트는 상태 조회를 반복(polling)하지 않아도 된다. 대용량 파일은 응답까지 오래 걸릴 수 있으니 업로드 요청의 타임아웃을 넉넉히 잡는다.
+- `ImportSummary` 주요 필드: `total` = `inserted`(신규) + `duplicates`(이미 있음) + `excluded`(제외) + `review`(검토 필요) + `errors`(오류), 그리고 `new_tracks`, `distinct_tracks`, `reasons`(사유별 건수).
+- 같은 파일을 다시 올려도 이미 저장된 기록은 `duplicates`로 세며 중복 집계하지 않는다.
+- 가져온 기록은 재생 시간을 알 수 없어 `listened_ms`가 null로 저장된다. 최초 기록일과 청취 횟수에는 반영되지만 총 재생 시간에는 포함되지 않는다.
+- 곡은 YouTube Music ID(`external_id`)로만 구분하고 `artist`는 null이다. **기기에서 수집한 곡과 같은 곡으로 합쳐지려면 Android가 같은 `external_id`를 보내야 한다.**
+- 오류: `409` 같은 회원의 다른 가져오기가 처리 중이거나 이벤트 식별자 충돌, `413` 크기 초과, `422` 형식 오류, `429` 회원당 분당 3회 초과(`Retry-After`), `503` 저장 실패(같은 파일로 다시 시도 가능).
 
 ### 자연어 질문
 
@@ -109,6 +132,7 @@ FirstListen은 Android에서 YouTube Music 청취 세션을 관찰해 개인별 
 
 - 모든 상태에서 `answer`는 서버가 만든 한국어 문장이다. 기본으로 이 문장을 그대로 표시한다.
 - `metric`이 `first`/`total`/`both`이면 `first_recorded_at`(UTC, 표시할 때 `Asia/Seoul`로 변환)과 `total_listened_ms`(밀리초)를 구조화된 값으로 함께 쓸 수 있다.
+- `metric`이 `total`/`both`여도 Takeout 기록만 있는 곡은 `total_listened_ms`가 null일 수 있다. 이때 `answer`가 "재생 시간을 알 수 없어 총 시간을 계산할 수 없습니다"를 포함한다.
 - `metric`이 `stats`이면 결과는 `rows`(최대 50행)에 있다. **열 이름은 질문마다 LLM이 정하므로 고정 스키마로 파싱하지 않는다.** `rows`를 표로 보여주려면 첫 행의 키를 열 제목으로 쓰고, 이름이 `_ms`로 끝나는 열은 밀리초이므로 시간 형식으로 바꿔 표시한다. 표를 만들지 않아도 `answer`만으로 결과가 전달된다.
 
 - `answered`: 서버가 계산한 결과를 표시한다.

@@ -54,7 +54,8 @@ def test_compare_track_metrics_and_score():
 def test_seed_creates_designed_records(client):
     members = seed(client)  # TestClient is an httpx.Client
     a, b = members["a"], members["b"]
-    assert set(a["track_ids"]) == {"입춘", "사건의 지평선", "봄날", "Hype Boy"}  # 20s "잠깐" is not stored
+    assert set(a["track_ids"]) == {"입춘", "사건의 지평선", "봄날", "Hype Boy",
+                                   "12월의 기적", "Raindrop", "오늘도"}  # 20s "잠깐" is not stored
     assert set(b["track_ids"]) == {LEAK_TITLE}
     stats = client.get(f"/api/v1/tracks/{a['track_ids']['입춘']}/stats", headers=a["headers"]).json()
     assert stats["total_listened_ms"] == 13 * 60_000 and stats["event_count"] == 4
